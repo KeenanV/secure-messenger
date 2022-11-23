@@ -3,6 +3,7 @@ import socket
 import packet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 
@@ -28,6 +29,7 @@ class TestClass:
         data.frames = {}
         data.data = "hello there"
 
+        # creates 128-bit nonce
         nonce = os.urandom(16)
         pack.encrypted = packet.encrypt(data, self.dhk, nonce)
 
@@ -42,15 +44,19 @@ class TestClass:
         print(f"Receive Time: {received[0][1]}")
 
     def generate_key(self):
-        params = dh.generate_parameters(generator=2, key_size=2048)
-        alice_priv = params.generate_private_key()
-        bob_pub = params.generate_private_key().public_key()
-        shared_key = alice_priv.exchange(bob_pub)
+        """
+        Generates an ECDH key from two simulated hosts
+
+        :return: bytes of 256-bit Diffie-Hellman key
+        """
+        alice_priv = ec.generate_private_key(ec.SECP384R1())
+        bob_priv = ec.generate_private_key(ec.SECP384R1())
+        shared_key = alice_priv.exchange(ec.ECDH(), bob_priv.public_key())
         derived_key = HKDF(
             algorithm=hashes.SHA256(),
             length=32,
             salt=None,
-            info=b'handshake data',
+            info=b'handshake',
         ).derive(shared_key)
         return derived_key
 
