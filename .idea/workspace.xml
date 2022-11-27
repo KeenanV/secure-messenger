@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="b78cf464-f3ca-4205-b26a-2882be47925e" name="Changes" comment="Protocol test">
+    <list default="true" id="b78cf464-f3ca-4205-b26a-2882be47925e" name="Changes" comment="ECDH and docstrings">
+      <change afterPath="$PROJECT_DIR$/src/protocol/packet_manager.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/protocol/pm_test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/protocol/packet.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/protocol/packet.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/protocol/test.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/protocol/test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/protocol/test.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -41,7 +43,29 @@
       <recent name="$PROJECT_DIR$/protocol" />
     </key>
   </component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Python.pm test">
+    <configuration name="pm test" type="PythonConfigurationType" factoryName="Python">
+      <module name="messenger" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="$PROJECT_DIR$/venv/bin/python" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src/protocol" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/protocol/pm_test.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="test" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="messenger" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -64,6 +88,10 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <list>
+      <item itemvalue="Python.test" />
+      <item itemvalue="Python.pm test" />
+    </list>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
@@ -76,7 +104,7 @@
       <workItem from="1669221347856" duration="30000" />
       <workItem from="1669221393064" duration="1697000" />
       <workItem from="1669223105196" duration="32000" />
-      <workItem from="1669223170524" duration="8645000" />
+      <workItem from="1669223170524" duration="59854000" />
     </task>
     <task id="LOCAL-00001" summary="Protocol test">
       <created>1669233084922</created>
@@ -85,7 +113,14 @@
       <option name="project" value="LOCAL" />
       <updated>1669233084922</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="ECDH and docstrings">
+      <created>1669235662251</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1669235662251</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -104,9 +139,22 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Protocol test" />
-    <option name="LAST_COMMIT_MESSAGE" value="Protocol test" />
+    <MESSAGE value="ECDH and docstrings" />
+    <option name="LAST_COMMIT_MESSAGE" value="ECDH and docstrings" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/src/protocol/packet_manager.py</url>
+          <line>102</line>
+          <option name="timeStamp" value="17" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/messenger$test.coverage" NAME="test Coverage Results" MODIFIED="1669235309961" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src/protocol" />
+    <SUITE FILE_PATH="coverage/messenger$test.coverage" NAME="test Coverage Results" MODIFIED="1669236842778" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src/protocol" />
+    <SUITE FILE_PATH="coverage/messenger$pm_test.coverage" NAME="pm test Coverage Results" MODIFIED="1669561084132" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src/protocol" />
   </component>
 </project>

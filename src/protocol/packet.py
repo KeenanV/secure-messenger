@@ -1,9 +1,16 @@
 import select
 import time
-from dataclasses import dataclass
 import socket
 import _pickle as cPickle
+from dataclasses import dataclass
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from enum import Enum
+
+
+class Flags(Enum):
+    HELLO = "hello"
+    BYE = "bye"
+    ELICIT = "elicit"
 
 
 @dataclass
@@ -11,6 +18,7 @@ class Packet:
     src: int
     dest: int
     cid: int
+    nonce: bytes
     encrypted: bytes
 
 
@@ -19,7 +27,7 @@ class PackEncrypted:
     pnum: int
     flags: list
     frames: dict
-    data: str
+    data: ...
 
 
 def encrypt(packet: PackEncrypted, key: bytes, nonce: bytes) -> bytes:
