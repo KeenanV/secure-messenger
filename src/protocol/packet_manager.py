@@ -72,6 +72,7 @@ class PacketManager:
                 contents = PackEncrypted(pnum=0, flags=[flag], frames={}, data=data)
                 if flag == Flags.HELLO:
                     contents.pnum = rand.randint(1000, 9999)
+                    sesh.packs.pnum = contents.pnum
                 else:
                     contents.pnum = sesh.packs.pnum + 1
 
@@ -123,6 +124,7 @@ class PacketManager:
                 self.ss.sendto(cPickle.dumps(pack), sesh.addr)
                 sesh.packs.sent.append((contents.pnum, pack, time.time()))
                 sesh.packs.unsent.remove((contents.pnum, pack))
+                sesh.packs.pnum += 1
                 # print(f"{self.uid} + {sesh.packs.unsent}")
 
     def recv(self):
