@@ -1,6 +1,5 @@
-import socket
-import string
-import random
+import socket, string
+import random, os
 import packet, packet_manager
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
@@ -17,13 +16,13 @@ class Server:
         self.connections = {}
         self.key = rsa_key
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind()
+        self.socket.bind(('localhost', 1111))
 
         self.pm = packet_manager.PacketManager(uid="server", sock=self.socket, port=1111, rsa_key=self.key)
 
     def generate_cid(self):
-        cid = ''.join(random.choice(string.ascii_letters) for i in range(15))
-        if not self.connections.has_key(cid):
+        cid = os.urandom(16)
+        if not cid in self.connections:
             return cid
         else:
             self.generate_cid()
@@ -31,36 +30,31 @@ class Server:
 
     def run(self): 
         while True:   
-            self.pm.recv()
-
             # registration for new users
-            for user in self.pm.get_unknown_messages():
-                if not self.users.has_key(user[1][0]):
-                    self.users[user[1][0]] = {"shared_key": user[1][1]}
-                    # need to get address from somewhere
-                    self.pm.new_sesh(uid=user[1][0], cid=user[0], addr=[str, int], pub_key=self.key)
+            for user in self.pm.get_reg_requests():
+                if user[1][0] not in self.users:
+                    self.users[user[1][0]] = {"session_key": user[1][1]}
 
             # already existing users
-            for user in self.users:
-                # login
-                if user.has_login_request():
-                    self.users[user].update({"online": True, "session_key": user.get_session_key()})
-                # logoff
-                if user.has_logoff_request():
+            for user in self.pm.get_login_requests():
+                if not True in self.users[user[0]]:
+                     self.users[user].update({"online": True, "session_key": user[1][0]})
+                else:
+                    pass # preventing multiple sessions?
+
+            for user in self.pm.get_logoff_requests():
+                if not False in self.users[user[0]]:
                     self.users[user].update({"online": False, "session_key": None})
-                # list
-                if user.has_list_request():
-                    self.pm.queue(data=list(self.users.keys), uid=user)
 
-                # connection between two users
-                if user.has_conn_request():
-                    cid = self.generate_cid()
-                    str = ''.join(random.choice(string.ascii_letters + string.digits) for i in range(15))
-                    self.pm.queue(data=str, uid=user)
-                    self.pm.queue(data=str, uid=user2)
-                    self.connections[cid] = {cid, (user, user2)}
+            for user in self.pm.get_list_requests():
+                self.pm.queue(data=list(self.users.keys), flag=None, uid=user[0])
 
-
+            for user in self.pm.get_connection_requests():
+                cid = self.generate_cid()
+                str = os.urandom(16)
+                self.pm.queue(data=str, flag=None, uid=user[0])
+                self.pm.queue(data=str, flag=None, uid=user[1])
+                self.connections[cid] = {cid, (user[0], user[1])}
 
     
 
