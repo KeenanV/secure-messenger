@@ -95,29 +95,31 @@ class Server:
             #     self.connections[cid] = {cid, (user[0], user[1])}
 
 def check_fp(pub):
-    if not exists(pub):
+    if exists(pub):
+        return True
+    else:
         return False
-    return True
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("-key", type=lambda x: check_fp(x), required=True)
+    parser.add_argument("-key", type=str, required=True)
 
     args = parser.parse_args()
+    if not check_fp(args.key):
+        print("Key does not exist")
+        exit(0)
     with open(args.key, "rb") as ff:
-        if ff.lower().endswith('.der'):
+        if args.key.lower().endswith('.der'):
              rsa_priv = serialization.load_der_public_key(
                 ff.read(),
                 backend=default_backend()
              )
         else: 
-            try:
                 rsa_priv = serialization.load_pem_public_key(
                     ff.read(),
                     backend=default_backend()
             )
-            except:
-                print("Error: receiver key file type not .PEM or .DER")
+                exit(0)
     server = Server(rsa_priv)
     server.run()
