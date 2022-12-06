@@ -80,8 +80,8 @@ class Client:
                         conn_key = packet[1][4]
                 if cid and rand_str and conn_addr and conn_key:
                     self.pm.new_cc_sesh(self.name, cid, conn_addr, conn_key, True)
-                    self.queue(hash(rand_str), Flags.CR, user)
-                    if not self.pm.get_cr_msg(user) == hash(rand_str):
+                    self.queue(hash(rand_str + 'a'), Flags.CR, user)
+                    if not self.pm.get_cr_msg(user) == hash(rand_str + 'a'):
                         print("Session hash is not the same, your connection is not secure! Killing session.")
                         self.pm.kill(user)
                 #else:
