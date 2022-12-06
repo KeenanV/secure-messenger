@@ -26,8 +26,8 @@ class PMTest:
         thread2 = threading.Thread(target=self.usr_in)
         thread1.start()
         thread2.start()
-        thread1.join()
-        thread2.join()
+        # thread1.join()
+        # thread2.join()
 
     def run(self):
         self.u1.new_sesh("Bob", 3345, ("localhost", 1340), self.rsa2.public_key())
@@ -54,10 +54,11 @@ class PMTest:
 
     def usr_in(self):
         while self.msg != "exit":
+            print(self.msg)
             msg = input("Input: ")
             self.msg = msg
 
 
 if __name__ == "__main__":
     test = PMTest()
-    test.run()
+    # test.run()

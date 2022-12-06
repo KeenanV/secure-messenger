@@ -2,6 +2,7 @@ import os
 import random
 import select
 import socket
+import srp
 import time
 import _pickle as cPickle
 from dataclasses import dataclass
@@ -35,12 +36,13 @@ class SeshInfo:
     uid: str
     cid: int
     addr: tuple[str, int]
-    shared_key: bytes
+    shared_key: bytes | srp.User
     pub_key: RSAPublicKey
     packs: PackInfo | None
     msgs: list
     nonces: list[bytes]
     handshook: bool
+    initiator: bool
 
 
 class PacketManager:
@@ -51,30 +53,70 @@ class PacketManager:
         self.rsa_key = rsa_key
         self.uid = uid
 
-    def new_sesh(self, uid: str, cid: int, addr: tuple[str, int], pub_key: RSAPublicKey):
+    def new_cc_sesh(self, uid: str, cid: int, addr: tuple[str, int], pub_key: RSAPublicKey, initiator: bool):
+        """
+        Creates a new client-client session over ECDH with the handshake being conducted
+        with hybrid encryption with RSA and AES.
+
+        :param uid: UID of user to connect to
+        :param cid: Connection ID for session
+        :param addr: Tuple of ip/port to connect to
+        :param pub_key: Public RSA key of other user
+        :param initiator: True if session initiated by this user
+        :return:
+        """
         priv = ec.generate_private_key(ec.SECP384R1())
         pb = priv.private_bytes(Encoding.DER, PrivateFormat.PKCS8, serialization.NoEncryption())
         packs = PackInfo(sent=[], recvd=[], unsent=[], time_recvd=0.0, pnum=0)
         sesh = SeshInfo(uid=uid, cid=cid, addr=addr, shared_key=pb, pub_key=pub_key,
-                        packs=packs, msgs=[], nonces=[], handshook=False)
+                        packs=packs, msgs=[], nonces=[], handshook=False, initiator=initiator)
         self.sessions.append(sesh)
-        data = (self.uid,
-                priv.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo),
-                self.rsa_key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo))
+
+        if initiator:
+            data = (self.uid, priv.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo))
+            self.queue(data=cPickle.dumps(data),
+                       flag=Flags.HELLO,
+                       uid=uid)
+
+    def new_cs_sesh(self, cid: int, addr: tuple[str, int], usrp: srp.User, pub_key: RSAPublicKey):
+        """
+        Creates a new client-server session over SRP with the handshake being conducted
+        with hybrid encryption with RSA and AES.
+
+        :param cid: Connection ID for session
+        :param addr: Tuple of ip/port to connect to
+        :param usrp: User's SRP identifier
+        :param pub_key: Server's public RSA key
+        :return:
+        """
+        packs = PackInfo(sent=[], recvd=[], unsent=[], time_recvd=0.0, pnum=0)
+        sesh = SeshInfo(uid="server", cid=cid, addr=addr, shared_key=usrp, pub_key=pub_key,
+                        packs=packs, msgs=[], nonces=[], handshook=False, initiator=True)
+        self.sessions.append(sesh)
+        uname, C = usrp.start_authentication()
+        data = (uname, C)
         self.queue(data=cPickle.dumps(data),
-                   flag=Flags.HELLO,
-                   uid=uid)
+                   flag=Flags.LOGIN,
+                   uid="server")
 
     def queue(self, data, flag: packet.Flags | None, uid: str):
+        """
+        Queues a message to be sent to the given uid with the given data and flags
+
+        :param data: Data to be sent
+        :param flag: Flag to be used or None
+        :param uid: UID of recipient
+        :return:
+        """
         for sesh in self.sessions:
             if sesh.uid == uid:
                 rand = random.SystemRandom()
                 contents = PackEncrypted(pnum=0, flags=[flag], frames={}, data=data)
-                if flag == Flags.HELLO:
+                if sesh.packs.pnum == 0:
                     contents.pnum = rand.randint(1000, 9999)
                     sesh.packs.pnum = contents.pnum
                 else:
-                    contents.pnum = sesh.packs.pnum + 1
+                    contents.pnum = sesh.packs.pnum
 
                 pickled = cPickle.dumps(contents)
                 nonce = os.urandom(12)
@@ -84,6 +126,13 @@ class PacketManager:
                 break
 
     def send(self, cid: int, pack: Packet):
+        """
+        Sends packet over the session associated with the given CID
+
+        :param cid: Connection ID of session to send packet over
+        :param pack: Packet to be sent
+        :return:
+        """
         frames = {'acks_recvd': [], 'acks_lost': [], 'ack_delay': 0.0}
         contents: PackEncrypted = cPickle.loads(pack.encrypted)
         for sesh in self.sessions:
@@ -105,7 +154,7 @@ class PacketManager:
                 ct_nonce = sesh.pub_key.encrypt(pack.nonce, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
                                                                          algorithm=hashes.SHA256(),
                                                                          label=None))
-                if Flags.HELLO in contents.flags:
+                if Flags.HELLO in contents.flags or Flags.LOGIN in contents.flags or Flags.REG in contents.flags:
                     temp_key = AESGCM.generate_key(128)
                     aesgcm = AESGCM(temp_key)
                     ct = aesgcm.encrypt(pack.nonce, cPickle.dumps(contents), None)
@@ -128,6 +177,11 @@ class PacketManager:
                 # print(f"{self.uid} + {sesh.packs.unsent}")
 
     def recv(self):
+        """
+        Listens for messages on the client's socket and handles them accordingly.
+
+        :return:
+        """
         msgs = select.select([self.ss], [], [], 0.1)[0]
         for conn in msgs:
             data, addr = conn.recvfrom(1500)
@@ -135,20 +189,24 @@ class PacketManager:
             for sesh in self.sessions:
                 # print(pack)
                 if pack.cid == sesh.cid:
-                    if sesh.handshook:
-                        nonce = self.rsa_key.decrypt(pack.nonce,
-                                                     padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                                  algorithm=hashes.SHA256(),
-                                                                  label=None))
-                        if nonce in sesh.nonces:
-                            break
-                        aesgcm = AESGCM(sesh.shared_key)
-                        contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, pack.encrypted, None))
-                        sesh.nonces.append(nonce)
-                    else:
-                        contents: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
-                        self.complete_handshake(pack, contents, True)
-                        return
+                    try:
+                        if sesh.handshook:
+                            nonce = self.rsa_key.decrypt(pack.nonce,
+                                                         padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                                      algorithm=hashes.SHA256(),
+                                                                      label=None))
+                            if nonce in sesh.nonces:
+                                break
+                            aesgcm = AESGCM(sesh.shared_key)
+                            contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, pack.encrypted, None))
+                            sesh.nonces.append(nonce)
+                        else:
+                            contents: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
+                            self.complete_handshake(pack, contents, sesh.initiator)
+                            return
+                    except Exception:
+                        print("Unable to decrypt")
+                        break
 
                     if contents.pnum in dict(sesh.packs.recvd):
                         for ii in range(0, len(sesh.packs.recvd)):
@@ -173,27 +231,26 @@ class PacketManager:
 
                     if Flags.ELICIT in contents.flags:
                         self.elicit(sesh.cid)
-                    if Flags.HELLO in contents.flags:
-                        self.complete_handshake(pack, contents.data, True)
                     if Flags.BYE in contents.flags:
-                        # TODO
-                        pass
+                        self.sessions.remove(sesh)
+                        break
 
                     sesh.msgs.append((contents.pnum, contents.data))
-                    return
-
-            # try:
-            contents: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
-            self.complete_handshake(pack, contents, False)
-            # except Exception as ee:
-            #     print("Unable to decrypt. Dropping packet")
-            #     print(ee)
+                    break
 
     def elicit(self, cid: int):
         # TODO
         pass
 
     def complete_handshake(self, pack: Packet, encrypted: tuple[bytes, bytes], initiator: bool):
+        """
+        Manages and completes ECDH or SRP exchange and handshake
+
+        :param pack: Received packet
+        :param encrypted: Encrypted section of packet
+        :param initiator: True if current user initiated the session
+        :return:
+        """
         nonce = self.rsa_key.decrypt(pack.nonce,
                                      padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
                                                   algorithm=hashes.SHA256(),
@@ -204,12 +261,11 @@ class PacketManager:
                                                      label=None))
         aesgcm = AESGCM(temp_key)
         contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, encrypted[1], None))
-        # print(contents)
-        keys: tuple[str, bytes, bytes] = cPickle.loads(contents.data)
+        keys: tuple[str, bytes] = cPickle.loads(contents.data)
 
-        if initiator:
-            for sesh in self.sessions:
-                if pack.cid == sesh.cid:
+        for sesh in self.sessions:
+            if pack.cid == sesh.cid:
+                if initiator:
                     priv: ec.EllipticCurvePrivateKey = serialization.load_der_private_key(sesh.shared_key, None)
                     pub: ec.EllipticCurvePublicKey = serialization.load_der_public_key(keys[1], None)
                     shared_key = priv.exchange(ec.ECDH(), pub)
@@ -223,35 +279,26 @@ class PacketManager:
                     sesh.handshook = True
                     # print(f"Message: Hello {keys[0]}, I'm {self.uid}.")
                     self.queue(f"Hello {keys[0]}, I'm {self.uid}.", flag=None, uid=sesh.uid)
-        else:
-            pub: ec.EllipticCurvePublicKey = serialization.load_der_public_key(keys[1], None)
-            priv = ec.generate_private_key(ec.SECP384R1())
-            shared_key = priv.exchange(ec.ECDH(), pub)
-            derived_key = HKDF(
-                algorithm=hashes.SHA256(),
-                length=32,
-                salt=None,
-                info=b'handshake',
-            ).derive(shared_key)
+                else:
+                    pub: ec.EllipticCurvePublicKey = serialization.load_der_public_key(keys[1], None)
+                    priv = ec.generate_private_key(ec.SECP384R1())
+                    shared_key = priv.exchange(ec.ECDH(), pub)
+                    derived_key = HKDF(
+                        algorithm=hashes.SHA256(),
+                        length=32,
+                        salt=None,
+                        info=b'handshake',
+                    ).derive(shared_key)
 
-            # user = self.get_user_info(pack.cid)
-            # TODO: get user info
-
-            packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[],
-                             time_recvd=time.time(), pnum=contents.pnum)
-
-            rsa_pub = serialization.load_der_public_key(keys[2], None)
-            sesh = SeshInfo(uid=keys[0], cid=pack.cid, addr=('localhost', pack.src), shared_key=derived_key,
-                            pub_key=rsa_pub, packs=packs, msgs=[], nonces=[], handshook=True)
-            self.sessions.append(sesh)
-            data = (self.uid,
-                    priv.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo),
-                    self.rsa_key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo))
-            self.queue(data=cPickle.dumps(data), flag=Flags.HELLO, uid=keys[0])
-
-    def get_user_info(self, cid: int):
-        # TODO
-        return 0
+                    packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[],
+                                     time_recvd=time.time(), pnum=contents.pnum)
+                    sesh.handshook = True
+                    sesh.shared_key = derived_key
+                    sesh.packs = packs
+                    data = (self.uid,
+                            priv.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo),
+                            self.rsa_key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo))
+                    self.queue(data=cPickle.dumps(data), flag=Flags.HELLO, uid=keys[0])
 
     def organize(self):
         # TODO
