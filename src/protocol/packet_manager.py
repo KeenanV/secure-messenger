@@ -201,24 +201,25 @@ class PacketManager:
                 # print(pack)
                 if pack.cid == sesh.cid:
                     exists = True
-                    try:
-                        if sesh.handshook:
-                            nonce = self.rsa_key.decrypt(pack.nonce,
-                                                         padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                                                                      algorithm=hashes.SHA256(),
-                                                                      label=None))
-                            if nonce in sesh.nonces:
-                                break
-                            print("yes")
-                            aesgcm = AESGCM(sesh.shared_key)
-                            contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, pack.encrypted, None))
-                            sesh.nonces.append(nonce)
-                        else:
-                            contents: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
-                            self.__complete_handshake(pack, contents, sesh.initiator)
-                    except Exception:
-                        print("Unable to decrypt")
-                        break
+                    # try:
+                    if sesh.handshook:
+                        nonce = self.rsa_key.decrypt(pack.nonce,
+                                                     padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                                  algorithm=hashes.SHA256(),
+                                                                  label=None))
+                        print("NONCE")
+                        if nonce in sesh.nonces:
+                            break
+                        print("yes")
+                        aesgcm = AESGCM(sesh.shared_key)
+                        contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, pack.encrypted, None))
+                        sesh.nonces.append(nonce)
+                    else:
+                        tup: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
+                        contents = self.__complete_handshake(pack, tup, sesh.initiator)
+                    # except Exception:
+                    #     print("Unable to decrypt")
+                    #     break
 
                     if contents.pnum in dict(sesh.packs.recvd):
                         for ii in range(0, len(sesh.packs.recvd)):
@@ -259,7 +260,7 @@ class PacketManager:
         # TODO
         pass
 
-    def __complete_handshake(self, pack: Packet, encrypted: tuple[bytes, bytes], initiator: bool):
+    def __complete_handshake(self, pack: Packet, encrypted: tuple[bytes, bytes], initiator: bool) -> PackEncrypted:
         """
         Manages and completes ECDH or SRP exchange and handshake
 
@@ -278,7 +279,7 @@ class PacketManager:
                                                      label=None))
         aesgcm = AESGCM(temp_key)
         contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, encrypted[1], None))
-        keys: tuple = cPickle.loads(contents.data)
+        keys = cPickle.loads(contents.data)
         exists = False
         for sesh in self.sessions:
             if pack.cid == sesh.cid:
@@ -286,28 +287,36 @@ class PacketManager:
                 if Flags.LOGIN in contents.flags:
                     if initiator:
                         if len(contents.frames['acks_recvd']) == 1:
-                            usr: srp.User = cPickle.loads(sesh.shared_key)
+                            usr: srp.User = sesh.shared_key
                             M = usr.process_challenge(keys[0], keys[1])
                             if M is None:
+                                print("DELETE")
                                 self.sessions.remove(sesh)
-                                return
-                            self.queue(M, Flags.LOGIN, uid="server")
+                                return contents
+                            self.queue(cPickle.dumps(M), Flags.LOGIN, uid="server")
+                            print(f"ROUND 1 {M}")
                         elif len(contents.frames['acks_recvd']) == 2:
-                            usr: srp.User = cPickle.loads(sesh.shared_key)
-                            if usr.verify_session(keys[0]) and usr.authenticated():
+                            usr: srp.User = sesh.shared_key
+                            if usr.verify_session(keys) and usr.authenticated():
                                 sesh.shared_key = usr.get_session_key()
+                                if sesh.shared_key is None:
+                                    print("FAILED")
+                                else:
+                                    print("SUCCESS")
                                 sesh.handshook = True
-                                self.queue(str(os.urandom(12)), Flags.CR, uid="server")
+                                self.queue(cPickle.dumps(str(os.urandom(12))), Flags.CR, uid="server")
                             else:
+                                print("DELETE2")
                                 self.sessions.remove(sesh)
-                                return
+                                return contents
                     else:
                         if len(contents.frames['acks_recvd']) == 1:
-                            svr: srp.Verifier = cPickle.loads(sesh.shared_key)
-                            HAMK = svr.verify_session(keys[0])
+                            svr: srp.Verifier = sesh.shared_key
+                            HAMK = svr.verify_session(keys)
                             if HAMK is None:
+                                print(f"DELETE3 {keys}")
                                 self.sessions.remove(sesh)
-                                return
+                                return contents
                             if svr.authenticated():
                                 sesh.shared_key = svr.get_session_key()
                                 sesh.handshook = True
@@ -351,12 +360,14 @@ class PacketManager:
         if not exists and Flags.LOGIN in contents.flags:
             packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[], time_recvd=time.time(), pnum=0)
             sesh = SeshInfo(uid=keys[0], cid=pack.cid, addr=pack.src, shared_key=b'',
-                            pub_key=serialization.load_pem_public_key(keys[2]), packs=packs,
+                            pub_key=serialization.load_pem_public_key(keys[2],), packs=packs,
                             msgs=[(Flags.LOGIN, keys[1])], nonces=[], handshook=False, initiator=False)
             rand = random.SystemRandom()
             contents.pnum = rand.randint(1000, 9999)
             sesh.packs.pnum = contents.pnum
             self.sessions.append(sesh)
+
+        return contents
 
     def __organize(self):
         # TODO
@@ -375,10 +386,12 @@ class PacketManager:
         msgs = []
         if uid is None:
             for sesh in self.sessions:
+                msgs.append(len(sesh.packs.recvd))
                 for mm in sesh.msgs:
                     msgs.append((mm[0], mm[1]))
         else:
             for sesh in self.sessions:
+                msgs.append(len(sesh.packs.recvd))
                 if sesh.uid == uid:
                     for mm in sesh.msgs:
                         msgs.append(mm[1])

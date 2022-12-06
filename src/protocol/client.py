@@ -27,8 +27,8 @@ class Client:
         self.port = port
         self.rsa_priv = rsa.generate_private_key(public_exponent=65537, key_size=2048,)
         self.server_pub: RSAPublicKey
-        with open("serve_pub.txt", "rb") as ff:
-            self.server_pub = serialization.load_pem_public_key(ff.read())
+        with open("serve_pub.pem", "rb") as ff:
+            self.server_pub = serialization.load_pem_public_key(ff.read(),)
 
         self.pm = packet_manager.PacketManager(uid=self.name, sock=self.ss, port=self.port, rsa_key=self.rsa_priv)
         # thread1 = threading.Thread(target=self.run)
@@ -38,7 +38,7 @@ class Client:
         self.run()
     
     def run(self):
-        usr = srp.User(self.name, self.pw)
+        usr = srp.User('Bob', 'bobthebuilder')
         rand = random.SystemRandom()
         self.pm.new_cs_sesh(rand.randint(10000000, 99999999), addr=("localhost", 1337),
                             usrp=usr, pub_key=self.server_pub)

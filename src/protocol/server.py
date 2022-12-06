@@ -1,27 +1,14 @@
 import os
 import socket
 import time
+import _pickle as cPickle
 
 import srp
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-from cryptography.hazmat.backends import default_backend
 
-from packet import Flags
 import packet_manager
-from argparse import ArgumentParser
-import socket, string
-import random, os
-import packet, packet_manager
-from os.path import exists
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
-from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives.serialization import Encoding
-from cryptography.hazmat.primitives.serialization import PublicFormat
-from cryptography.hazmat.primitives.serialization import PrivateFormat
+from packet import Flags
 
 
 class Server:
@@ -34,14 +21,16 @@ class Server:
                                 "passwd": ...,
                                 "addr": ("localhost", 1350),
                                 "online": False}}
-        with open("bobs.txt", "rb") as ff:
-            bobs = ff.read()
-        with open("bobv.txt", "rb") as ff:
-            bobv = ff.read()
-        with open("alices.txt", "rb") as ff:
-            alices = ff.read()
-        with open("alicev.txt", "rb") as ff:
-            alicev = ff.read()
+        with open("bobs.txt", "rb") as fp:
+            bobs = fp.read()
+            print(bobs)
+        with open("bobv.txt", "rb") as fp:
+            bobv = fp.read()
+            print(bobv)
+        with open("alices.txt", "rb") as fp:
+            alices = fp.read()
+        with open("alicev.txt", "rb") as fp:
+            alicev = fp.read()
         self.users['Bob']['passwd'] = (bobs, bobv)
         self.users['Alice']['passwd'] = (alices, alicev)
 
@@ -68,14 +57,18 @@ class Server:
             #         self.users[user[1][0]] = {"public_key": user[1][0], "g_w": user[1][1]}
 
             # already existing users
-            for user in self.pm.get_login_requests():
-                if user[0] in self.users:
-                    passwd = self.users[user[0]]['passwd']
-                    svr = srp.Verifier(user[0], passwd[0], passwd[1], user[1])
-                    ss, BB = svr.get_challenge()
-                    self.pm.set_srp_verifier(user[0], svr)
-                    self.pm.queue((ss, BB), Flags.LOGIN, user[0])
-                    self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
+            logins = self.pm.get_login_requests()
+            if len(logins) >= 1:
+                for user in logins:
+                    if user[0] in self.users:
+                        passwd = self.users[user[0]]['passwd']
+                        print(user[0])
+                        print(user[1])
+                        svr = srp.Verifier(user[0], passwd[0], passwd[1], user[1])
+                        ss, BB = svr.get_challenge()
+                        self.pm.set_srp_verifier(user[0], svr)
+                        self.pm.queue(cPickle.dumps((ss, BB)), Flags.LOGIN, user[0])
+                        self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
 
             print(f"msgs: {self.pm.get_msgs()}")
             time.sleep(0.01)
@@ -94,30 +87,10 @@ class Server:
             #     self.pm.queue(data=str, flag=None, uid=user[1])
             #     self.connections[cid] = {cid, (user[0], user[1])}
 
-def check_fp(pub):
-    if not exists(pub):
-        return False
-    return True
-
 
 if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument("-key", type=lambda x: check_fp(x), required=True)
+    with open("serve_priv.pem", "rb") as ff:
+        rsa_priv = serialization.load_pem_private_key(ff.read(), password=None,)
 
-    args = parser.parse_args()
-    with open(args.key, "rb") as ff:
-        if ff.lower().endswith('.der'):
-             rsa_priv = serialization.load_der_public_key(
-                ff.read(),
-                backend=default_backend()
-             )
-        else: 
-            try:
-                rsa_priv = serialization.load_pem_public_key(
-                    ff.read(),
-                    backend=default_backend()
-            )
-            except:
-                print("Error: receiver key file type not .PEM or .DER")
     server = Server(rsa_priv)
     server.run()
