@@ -14,6 +14,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 import packet_manager
+from protocol.packet import Flags
+from protocol.packet_manager import SeshInfo
 
 
 class Client:
@@ -58,12 +60,11 @@ class Client:
                             usrp=usr, pub_key=self.server_pub)
          # TEST   
         usr_in = input("> ")
-        self.command(usr_in)
+        self.command(usr_in.split())
 
     def command(self, usr_in: str):
-        command = usr_in.split()
-        print(command)
-        match command:
+        print(usr_in)
+        match usr_in:
             case ["connect", user]:
                 self.pm.queue("connect", None, user)
                 response = self.pm.get_msgs("server")
@@ -79,9 +80,12 @@ class Client:
                         conn_key = packet[1][4]
                 if cid and rand_str and conn_addr and conn_key:
                     self.pm.new_cc_sesh(self.name, cid, conn_addr, conn_key, True)
-                    self.queue(rand_str, user)
-                else:
-                    self.command(["connect", user])
+                    self.queue(hash(rand_str), Flags.CR, user)
+                    if not self.pm.get_cr_msg(user) == hash(rand_str):
+                        print("Session hash is not the same, your connection is not secure! Killing session.")
+                        self.pm.kill(user)
+                #else:
+                #    self.command(["connect", user])
 
                 # This needs to ask the server first to get the addr, rsa, and cid
                 # self.pm.new_cc_sesh(self.name)  # have packet manager set up
