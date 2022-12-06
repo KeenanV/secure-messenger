@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
-from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
+from cryptography.hazmat.primitives.asymmetric import ec, padding
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.serialization import Encoding
@@ -261,44 +261,72 @@ class PacketManager:
                                                      label=None))
         aesgcm = AESGCM(temp_key)
         contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, encrypted[1], None))
-        keys: tuple[str, bytes] = cPickle.loads(contents.data)
+        keys: tuple = cPickle.loads(contents.data)
 
         for sesh in self.sessions:
             if pack.cid == sesh.cid:
-                if initiator:
-                    priv: ec.EllipticCurvePrivateKey = serialization.load_der_private_key(sesh.shared_key, None)
-                    pub: ec.EllipticCurvePublicKey = serialization.load_der_public_key(keys[1], None)
-                    shared_key = priv.exchange(ec.ECDH(), pub)
-                    derived_key = HKDF(
-                        algorithm=hashes.SHA256(),
-                        length=32,
-                        salt=None,
-                        info=b'handshake',
-                    ).derive(shared_key)
-                    sesh.shared_key = derived_key
-                    sesh.handshook = True
-                    # print(f"Message: Hello {keys[0]}, I'm {self.uid}.")
-                    self.queue(f"Hello {keys[0]}, I'm {self.uid}.", flag=None, uid=sesh.uid)
+                if Flags.LOGIN in contents.flags:
+                    if initiator:
+                        if len(contents.frames['acks_recvd']) == 1:
+                            usr: srp.User = cPickle.loads(sesh.shared_key)
+                            M = usr.process_challenge(keys[0], keys[1])
+                            if M is None:
+                                self.sessions.remove(sesh)
+                                return
+                            self.queue(M, Flags.LOGIN, uid="server")
+                        elif len(contents.frames['acks_recvd']) == 2:
+                            usr: srp.User = cPickle.loads(sesh.shared_key)
+                            if usr.verify_session(keys[0]) and usr.authenticated():
+                                sesh.shared_key = usr.get_session_key()
+                                self.queue(str(os.urandom(12)), Flags.CR, uid="server")
+                            else:
+                                self.sessions.remove(sesh)
+                                return
+                    else:
+                        if len(contents.frames['acks_recvd']) == 1:
+                            svr: srp.Verifier = cPickle.loads(sesh.shared_key)
+                            HAMK = svr.verify_session(keys[0])
+                            if HAMK is None:
+                                self.sessions.remove(sesh)
+                                return
+                            if svr.authenticated():
+                                sesh.shared_key = svr.get_session_key()
+                                self.queue(HAMK, Flags.LOGIN, uid=sesh.uid)
                 else:
-                    pub: ec.EllipticCurvePublicKey = serialization.load_der_public_key(keys[1], None)
-                    priv = ec.generate_private_key(ec.SECP384R1())
-                    shared_key = priv.exchange(ec.ECDH(), pub)
-                    derived_key = HKDF(
-                        algorithm=hashes.SHA256(),
-                        length=32,
-                        salt=None,
-                        info=b'handshake',
-                    ).derive(shared_key)
+                    if initiator:
+                        priv: ec.EllipticCurvePrivateKey = serialization.load_der_private_key(sesh.shared_key, None)
+                        pub: ec.EllipticCurvePublicKey = serialization.load_der_public_key(keys[1], None)
+                        shared_key = priv.exchange(ec.ECDH(), pub)
+                        derived_key = HKDF(
+                            algorithm=hashes.SHA256(),
+                            length=32,
+                            salt=None,
+                            info=b'handshake',
+                        ).derive(shared_key)
+                        sesh.shared_key = derived_key
+                        sesh.handshook = True
+                        # print(f"Message: Hello {keys[0]}, I'm {self.uid}.")
+                        self.queue(f"Hello {keys[0]}, I'm {self.uid}.", flag=None, uid=sesh.uid)
+                    else:
+                        pub: ec.EllipticCurvePublicKey = serialization.load_der_public_key(keys[1], None)
+                        priv = ec.generate_private_key(ec.SECP384R1())
+                        shared_key = priv.exchange(ec.ECDH(), pub)
+                        derived_key = HKDF(
+                            algorithm=hashes.SHA256(),
+                            length=32,
+                            salt=None,
+                            info=b'handshake',
+                        ).derive(shared_key)
 
-                    packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[],
-                                     time_recvd=time.time(), pnum=contents.pnum)
-                    sesh.handshook = True
-                    sesh.shared_key = derived_key
-                    sesh.packs = packs
-                    data = (self.uid,
-                            priv.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo),
-                            self.rsa_key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo))
-                    self.queue(data=cPickle.dumps(data), flag=Flags.HELLO, uid=keys[0])
+                        packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[],
+                                         time_recvd=time.time(), pnum=contents.pnum)
+                        sesh.handshook = True
+                        sesh.shared_key = derived_key
+                        sesh.packs = packs
+                        data = (self.uid,
+                                priv.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo),
+                                self.rsa_key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo))
+                        self.queue(data=cPickle.dumps(data), flag=Flags.HELLO, uid=keys[0])
 
     def organize(self):
         # TODO

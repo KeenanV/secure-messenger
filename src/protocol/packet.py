@@ -13,6 +13,7 @@ class Flags(Enum):
     ELICIT = "elicit"
     LOGIN = "login"
     REG = "reg"
+    CR = "cr"
 
 
 @dataclass
