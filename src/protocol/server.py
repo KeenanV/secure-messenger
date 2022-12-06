@@ -10,23 +10,23 @@ from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.hazmat.primitives.serialization import PublicFormat
 from cryptography.hazmat.primitives.serialization import PrivateFormat
 
+
 class Server:
     def __init__(self, rsa_key: RSAPrivateKey):
         self.users = {}
         self.connections = {}
-        self.key = rsa_key
+        self.rsa_key = rsa_key
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(('localhost', 1111))
+        self.socket.bind(('localhost', 1337))
 
-        self.pm = packet_manager.PacketManager(uid="server", sock=self.socket, port=1111, rsa_key=self.key)
+        self.pm = packet_manager.PacketManager(uid="server", sock=self.socket, port=1337, rsa_key=self.rsa_key)
 
     def generate_cid(self):
         cid = os.urandom(16)
-        if not cid in self.connections:
+        if cid not in self.connections:
             return cid
         else:
-            self.generate_cid()
-        
+            return self.generate_cid()
 
     def run(self): 
         while True:   
