@@ -18,8 +18,8 @@ class Flags(Enum):
 
 @dataclass
 class Packet:
-    src: int
-    dest: int
+    src: tuple[str, int]
+    dest: tuple[str, int]
     cid: int
     nonce: bytes
     encrypted: bytes
