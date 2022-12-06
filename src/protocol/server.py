@@ -29,35 +29,30 @@ class Server:
             return self.generate_cid()
 
     def run(self): 
-        while True:   
+        while True:
+            self.pm.run()
             # registration for new users
-            for user in self.pm.get_reg_requests():
-                if user[1][0] not in self.users:
-                    self.users[user[1][0]] = {"public_key": user[1][0], "g_w": user[1][1]}
+            # for user in self.pm.get_reg_requests():
+            #     if user[1][0] not in self.users:
+            #         self.users[user[1][0]] = {"public_key": user[1][0], "g_w": user[1][1]}
 
             # already existing users
             for user in self.pm.get_login_requests():
-
                 self.pm.complete_handshake(user[1][0], user[1][1])
-                # if not True in self.users[user[0]]:
 
-                #      self.users[user].update({"online": True, "session_key": user[1][0]})
-                # else:
-                #     pass # preventing multiple sessions?
+            # for user in self.pm.get_logoff_requests():
+            #     if not False in self.users[user[0]]:
+            #         self.users[user].update({"online": False, "session_key": None})
 
-            for user in self.pm.get_logoff_requests():
-                if not False in self.users[user[0]]:
-                    self.users[user].update({"online": False, "session_key": None})
+            # for user in self.pm.get_list_requests():
+            #     self.pm.queue(data=list(self.users.keys), flag=None, uid=user[0])
 
-            for user in self.pm.get_list_requests():
-                self.pm.queue(data=list(self.users.keys), flag=None, uid=user[0])
-
-            for user in self.pm.get_connection_requests():
-                cid = self.generate_cid()
-                str = os.urandom(16)
-                self.pm.queue(data=str, flag=None, uid=user[0])
-                self.pm.queue(data=str, flag=None, uid=user[1])
-                self.connections[cid] = {cid, (user[0], user[1])}
+            # for user in self.pm.get_connection_requests():
+            #     cid = self.generate_cid()
+            #     str = os.urandom(16)
+            #     self.pm.queue(data=str, flag=None, uid=user[0])
+            #     self.pm.queue(data=str, flag=None, uid=user[1])
+            #     self.connections[cid] = {cid, (user[0], user[1])}
 
     
 

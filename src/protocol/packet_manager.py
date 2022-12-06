@@ -349,7 +349,7 @@ class PacketManager:
         if not exists and Flags.LOGIN in contents.flags:
             packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[], time_recvd=time.time(), pnum=0)
             sesh = SeshInfo(uid=keys[0], cid=pack.cid, addr=pack.src, shared_key=b'', pub_key=keys[2],
-                            packs=packs, msgs=[keys[1]], nonces=[], handshook=False, initiator=False)
+                            packs=packs, msgs=[(Flags.LOGIN, keys[1])], nonces=[], handshook=False, initiator=False)
             rand = random.SystemRandom()
             contents.pnum = rand.randint(1000, 9999)
             sesh.packs.pnum = contents.pnum
@@ -373,7 +373,7 @@ class PacketManager:
         if uid is None:
             for sesh in self.sessions:
                 for mm in sesh.msgs:
-                    msgs.append((sesh.uid, mm[1]))
+                    msgs.append((mm[0], mm[1]))
         else:
             for sesh in self.sessions:
                 if sesh.uid == uid:
@@ -382,7 +382,16 @@ class PacketManager:
 
         return msgs
 
-    def srp_verifier(self, uid: str, svr: srp.Verifier):
+    def get_login_requests(self) -> list:
+        msgs = []
+        for sesh in self.sessions:
+            for msg in sesh.msgs:
+                if isinstance(msg, tuple):
+                    if msg[0] == Flags.LOGIN:
+                        msgs.append((msg[0], msg[1]))
+        return msgs
+
+    def set_srp_verifier(self, uid: str, svr: srp.Verifier):
         for sesh in self.sessions:
             if sesh.uid == uid:
                 sesh.shared_key = svr
