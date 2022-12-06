@@ -35,7 +35,8 @@ class Client:
         # thread2 = threading.Thread(target=self.usr_in)
         # thread1.start()
         # thread2.start()
-        self.run()
+        # self.run()
+        self.usr_in()
     
     def run(self):
         usr = srp.User(self.name, self.pw)
@@ -44,21 +45,46 @@ class Client:
                             usrp=usr, pub_key=self.server_pub)
         while True:
             self.pm.run()
-            print(f"msgs: {self.pm.get_msgs()}")
+            if self.pm.get_msgs():
+                print(f"msgs: {self.pm.get_msgs()}")
             sys.stdout.flush()
             time.sleep(0.01)
 
     def usr_in(self):
+        # TEST
+        usr = srp.User(self.name, self.pw)
+        rand = random.SystemRandom()
+        self.pm.new_cs_sesh(rand.randint(10000000, 99999999), addr=("localhost", 1337),
+                            usrp=usr, pub_key=self.server_pub)
+         # TEST   
         usr_in = input("> ")
         self.command(usr_in)
 
     def command(self, usr_in: str):
         command = usr_in.split()
+        print(command)
         match command:
-            case ["connect", user, msg]:
+            case ["connect", user]:
+                self.pm.queue("connect", None, user)
+                response = self.pm.get_msgs("server")
+                cid = None
+                rand_str = None
+                conn_addr = None
+                conn_key = None
+                for packet in response:
+                    if "connection init:" in packet[1]:
+                        cid = packet[1][1]
+                        rand_str = packet[1][2]
+                        conn_addr = packet[1][3]
+                        conn_key = packet[1][4]
+                if cid and rand_str and conn_addr and conn_key:
+                    self.pm.new_cc_sesh(self.name, cid, conn_addr, conn_key, True)
+                    self.queue(rand_str, user)
+                else:
+                    self.command(["connect", user])
+
                 # This needs to ask the server first to get the addr, rsa, and cid
                 # self.pm.new_cc_sesh(self.name)  # have packet manager set up
-                pass
             case ["send", user, msg]:
                 self.pm.queue(msg, None, user)  # have packet manager set up
             case ["list"]:
