@@ -6,6 +6,7 @@ import threading
 import time
 from argparse import ArgumentParser
 from os.path import exists
+import hashlib
 
 import srp
 from cryptography.hazmat.backends import default_backend
@@ -49,6 +50,27 @@ class Client:
             self.pm.run()
             if self.pm.get_msgs():
                 print(f"msgs: {self.pm.get_msgs()}")
+                if self.pm.get_msgs("server"):
+                    response = self.pm.get_msgs("server")
+                    cid = None
+                    rand_str = None
+                    conn_addr = None
+                    conn_key = None
+                    for packet in response:
+                        if "connection init:" in packet[1]:
+                            user = packet[1][1]
+                            cid = packet[1][2]
+                            rand_str = packet[1][3]
+                            conn_addr = packet[1][4]
+                            conn_key = packet[1][5]
+                    if cid and rand_str and conn_addr and conn_key:
+                        self.pm.new_cc_sesh(self.name, cid, conn_addr, conn_key, True)
+                        self.pm.queue(hashlib.sha256(rand_str), Flags.CR, user)
+                        if not self.pm.get_cr_msg(user) == hashlib.sha256(rand_str + 'a'):
+                            print("Session hash is not the same, your connection is not secure! Killing session.")
+                            self.pm.kill(user)
+
+
             sys.stdout.flush()
             time.sleep(0.01)
 
@@ -66,24 +88,8 @@ class Client:
         print(usr_in)
         match usr_in:
             case ["connect", user]:
-                self.pm.queue("connect", None, user)
-                response = self.pm.get_msgs("server")
-                cid = None
-                rand_str = None
-                conn_addr = None
-                conn_key = None
-                for packet in response:
-                    if "connection init:" in packet[1]:
-                        cid = packet[1][1]
-                        rand_str = packet[1][2]
-                        conn_addr = packet[1][3]
-                        conn_key = packet[1][4]
-                if cid and rand_str and conn_addr and conn_key:
-                    self.pm.new_cc_sesh(self.name, cid, conn_addr, conn_key, True)
-                    self.queue(hash(rand_str + 'a'), Flags.CR, user)
-                    if not self.pm.get_cr_msg(user) == hash(rand_str + 'a'):
-                        print("Session hash is not the same, your connection is not secure! Killing session.")
-                        self.pm.kill(user)
+                self.pm.queue("connect " + user, None, "server")
+                
                 #else:
                 #    self.command(["connect", user])
 
