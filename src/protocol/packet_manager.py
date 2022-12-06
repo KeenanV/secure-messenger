@@ -19,7 +19,6 @@ from cryptography.hazmat.primitives.serialization import PrivateFormat
 from packet import Packet
 from packet import PackEncrypted
 from packet import Flags
-from protocol import packet
 
 
 @dataclass
@@ -61,6 +60,7 @@ class PacketManager:
             for msg in sesh.packs.unsent:
                 self.__send(msg[1].cid, msg[1])
                 time.sleep(0.001)
+            sesh.packs.unsent.clear()
 
     def new_cc_sesh(self, uid: str, cid: int, addr: tuple[str, int], pub_key: RSAPublicKey, initiator: bool):
         """
@@ -103,12 +103,13 @@ class PacketManager:
                         packs=packs, msgs=[], nonces=[], handshook=False, initiator=True)
         self.sessions.append(sesh)
         uname, C = usrp.start_authentication()
-        data = (uname, C, self.rsa_key.public_key())
+        data = (uname, C, self.rsa_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
+                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo))
         self.queue(data=cPickle.dumps(data),
                    flag=Flags.LOGIN,
                    uid="server")
 
-    def queue(self, data, flag: packet.Flags | None, uid: str):
+    def queue(self, data, flag: Flags | None, uid: str):
         """
         Queues a message to be sent to the given uid with the given data and flags
 
@@ -181,7 +182,7 @@ class PacketManager:
                 # print(f"sending: {contents}")
                 self.ss.sendto(cPickle.dumps(pack), sesh.addr)
                 sesh.packs.sent.append((contents.pnum, pack, time.time()))
-                sesh.packs.unsent.remove((contents.pnum, pack))
+                # sesh.packs.unsent.remove((contents.pnum, pack))
                 sesh.packs.pnum += 1
                 # print(f"{self.uid} + {sesh.packs.unsent}")
 
@@ -193,7 +194,7 @@ class PacketManager:
         """
         msgs = select.select([self.ss], [], [], 0.1)[0]
         for conn in msgs:
-            data, addr = conn.recvfrom(1500)
+            data, addr = conn.recvfrom(4096)
             pack: Packet = cPickle.loads(data)
             exists = False
             for sesh in self.sessions:
@@ -208,6 +209,7 @@ class PacketManager:
                                                                       label=None))
                             if nonce in sesh.nonces:
                                 break
+                            print("yes")
                             aesgcm = AESGCM(sesh.shared_key)
                             contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, pack.encrypted, None))
                             sesh.nonces.append(nonce)
@@ -245,7 +247,7 @@ class PacketManager:
                         self.sessions.remove(sesh)
                         break
 
-                    if not contents.flags:
+                    if not contents.flags or Flags.CR in contents.flags:
                         sesh.msgs.append((contents.pnum, contents.data))
                     break
 
@@ -348,8 +350,9 @@ class PacketManager:
 
         if not exists and Flags.LOGIN in contents.flags:
             packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[], time_recvd=time.time(), pnum=0)
-            sesh = SeshInfo(uid=keys[0], cid=pack.cid, addr=pack.src, shared_key=b'', pub_key=keys[2],
-                            packs=packs, msgs=[(Flags.LOGIN, keys[1])], nonces=[], handshook=False, initiator=False)
+            sesh = SeshInfo(uid=keys[0], cid=pack.cid, addr=pack.src, shared_key=b'',
+                            pub_key=serialization.load_pem_public_key(keys[2]), packs=packs,
+                            msgs=[(Flags.LOGIN, keys[1])], nonces=[], handshook=False, initiator=False)
             rand = random.SystemRandom()
             contents.pnum = rand.randint(1000, 9999)
             sesh.packs.pnum = contents.pnum
@@ -388,8 +391,14 @@ class PacketManager:
             for msg in sesh.msgs:
                 if isinstance(msg, tuple):
                     if msg[0] == Flags.LOGIN:
-                        msgs.append((msg[0], msg[1]))
+                        msgs.append((sesh.uid, msg[1]))
         return msgs
+
+    def get_pub(self, uid: str) -> RSAPublicKey | None:
+        for sesh in self.sessions:
+            if uid == sesh.uid:
+                return sesh.pub_key
+        return None
 
     def set_srp_verifier(self, uid: str, svr: srp.Verifier):
         for sesh in self.sessions:

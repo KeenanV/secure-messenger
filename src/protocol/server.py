@@ -1,19 +1,36 @@
-import socket, string
-import random, os
-import packet, packet_manager
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
-from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives.serialization import Encoding
-from cryptography.hazmat.primitives.serialization import PublicFormat
-from cryptography.hazmat.primitives.serialization import PrivateFormat
+import os
+import socket
+import time
+
+import srp
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+
+from packet import Flags
+import packet_manager
 
 
 class Server:
     def __init__(self, rsa_key: RSAPrivateKey):
-        self.users = {}
+        self.users = {"Bob": {"pub_key": None,
+                              "passwd": ...,
+                              "addr": ("localhost", 1340),
+                              "online": False},
+                      "Alice": {"pub_key": None,
+                                "passwd": ...,
+                                "addr": ("localhost", 1350),
+                                "online": False}}
+        with open("bobs.txt", "rb") as ff:
+            bobs = ff.read()
+        with open("bobv.txt", "rb") as ff:
+            bobv = ff.read()
+        with open("alices.txt", "rb") as ff:
+            alices = ff.read()
+        with open("alicev.txt", "rb") as ff:
+            alicev = ff.read()
+        self.users['Bob']['passwd'] = (bobs, bobv)
+        self.users['Alice']['passwd'] = (alices, alicev)
+
         self.connections = {}
         self.rsa_key = rsa_key
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -38,7 +55,16 @@ class Server:
 
             # already existing users
             for user in self.pm.get_login_requests():
-                self.pm.complete_handshake(user[1][0], user[1][1])
+                if user[0] in self.users:
+                    passwd = self.users[user[0]]['passwd']
+                    svr = srp.Verifier(user[0], passwd[0], passwd[1], user[1])
+                    ss, BB = svr.get_challenge()
+                    self.pm.set_srp_verifier(user[0], svr)
+                    self.pm.queue((ss, BB), Flags.LOGIN, user[0])
+                    self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
+
+            print(f"msgs: {self.pm.get_msgs()}")
+            time.sleep(0.01)
 
             # for user in self.pm.get_logoff_requests():
             #     if not False in self.users[user[0]]:
@@ -54,32 +80,10 @@ class Server:
             #     self.pm.queue(data=str, flag=None, uid=user[1])
             #     self.connections[cid] = {cid, (user[0], user[1])}
 
-    
 
-# use a message to a queue when it's going to send
+if __name__ == "__main__":
+    with open("serve_priv.txt", "rb") as ff:
+        rsa_priv = serialization.load_pem_private_key(ff.read(), password=None,)
 
-# two users connecting, server needs to create and store connection id
-# store shared secret between two users
-
-# upon registration message would be tuple username, key
-# get_messages -> requires uid
-# get_unknown_messages -> any without id
-# would return list of tuples, each tuple would be (connection_id, list of messages(message contains (username, shared key)))
-# needs username and shared key, pull from get_unknown_messages 
-# assume index[0] in messages
-
-# provide said information about connections
-# list function
-
-# if server's spamming registration, drop
-        
-# dictionary 1: {username, {pass, online, session_key, public_key}}
-# dictionary 2: {conn_id, (user1, user2)}
-
-# registration
-# ECDH to establish session key, encrypted with server's public key
-
-# login
-# SRP with asymmetric encryption to establish sesison key
-# server will be receiving connection 
-
+    server = Server(rsa_priv)
+    server.run()

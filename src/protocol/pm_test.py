@@ -10,6 +10,7 @@ class PMTest:
         self.ss1 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.ss1.bind(("localhost", 1337))
         self.rsa1 = rsa.generate_private_key(public_exponent=65537, key_size=2048,)
+        self.rsa1.private_numbers()
         self.u1 = packet_manager.PacketManager(uid="Alice",
                                                sock=self.ss1,
                                                port=1337,

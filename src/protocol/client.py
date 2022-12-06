@@ -1,7 +1,13 @@
+import os
+import random
 import socket
+import sys
+import threading
+import time
 from argparse import ArgumentParser
 from os.path import exists
 
+import srp
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -14,24 +20,37 @@ class Client:
     def __init__(self, name: str, password: str, reg: bool, ip: str, port: int):
         self.reg = reg
         self.ss = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.ss.bind(('localhost', port))  # localhost for testing
+        self.ss.bind((ip, port))  # localhost for testing
         self.name = name
         self.pw = password
         self.socket = socket
         self.port = port
         self.rsa_priv = rsa.generate_private_key(public_exponent=65537, key_size=2048,)
-        self.server_pub: RSAPublicKey  # TODO
+        self.server_pub: RSAPublicKey
+        with open("serve_pub.txt", "rb") as ff:
+            self.server_pub = serialization.load_pem_public_key(ff.read())
 
         self.pm = packet_manager.PacketManager(uid=self.name, sock=self.ss, port=self.port, rsa_key=self.rsa_priv)
+        # thread1 = threading.Thread(target=self.run)
+        # thread2 = threading.Thread(target=self.usr_in)
+        # thread1.start()
+        # thread2.start()
+        self.run()
     
     def run(self):
+        usr = srp.User(self.name, self.pw)
+        rand = random.SystemRandom()
+        self.pm.new_cs_sesh(rand.randint(10000000, 99999999), addr=("localhost", 1337),
+                            usrp=usr, pub_key=self.server_pub)
         while True:
-            usr_in = input("> ")
-            # usr_in = stdin.read().rstrip()
-            # if not usr_in:
-            #     print("> ", end="")
-            #     return
-            self.command(usr_in)
+            self.pm.run()
+            print(f"msgs: {self.pm.get_msgs()}")
+            sys.stdout.flush()
+            time.sleep(0.01)
+
+    def usr_in(self):
+        usr_in = input("> ")
+        self.command(usr_in)
 
     def command(self, usr_in: str):
         command = usr_in.split()
@@ -76,12 +95,12 @@ def get_key(pub):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("-user", type=str, required=True)
+    parser.add_argument("-usr", type=str, required=True)
     parser.add_argument("-pw", type=str, required=True)
     parser.add_argument("-ip", type=str, required=True)
     parser.add_argument("-port", type=int, required=True)
     parser.add_argument("-reg", type=str, required=False)
 
     args = parser.parse_args()
-    client = Client(args.user, args.pw, args.reg, args.ip, args.port)
+    client = Client(args.usr, args.pw, args.reg, args.ip, args.port)
     client.run()
