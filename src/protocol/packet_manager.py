@@ -103,9 +103,11 @@ class PacketManager:
                         packs=packs, msgs=[], nonces=[], handshook=False, initiator=True)
         self.sessions.append(sesh)
         uname, C = usrp.start_authentication()
+        print(f"uname: {uname}")
+        print(f"c: {C}")
         data = (uname, C, self.rsa_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
                                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo))
-        self.queue(data=cPickle.dumps(data),
+        self.queue(data=data,
                    flag=Flags.LOGIN,
                    uid="server")
 
@@ -279,7 +281,7 @@ class PacketManager:
                                                      label=None))
         aesgcm = AESGCM(temp_key)
         contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, encrypted[1], None))
-        keys = cPickle.loads(contents.data)
+        keys = contents.data
         exists = False
         for sesh in self.sessions:
             if pack.cid == sesh.cid:
@@ -293,8 +295,8 @@ class PacketManager:
                                 print("DELETE")
                                 self.sessions.remove(sesh)
                                 return contents
-                            self.queue(cPickle.dumps(M), Flags.LOGIN, uid="server")
-                            print(f"ROUND 1 {M}")
+                            self.queue(M, Flags.LOGIN, uid="server")
+                            print(f"ROUND 1 {keys[0]}\n{keys[1]}")
                         elif len(contents.frames['acks_recvd']) == 2:
                             usr: srp.User = sesh.shared_key
                             if usr.verify_session(keys) and usr.authenticated():
@@ -304,7 +306,7 @@ class PacketManager:
                                 else:
                                     print("SUCCESS")
                                 sesh.handshook = True
-                                self.queue(cPickle.dumps(str(os.urandom(12))), Flags.CR, uid="server")
+                                self.queue(str(os.urandom(12)), Flags.CR, uid="server")
                             else:
                                 print("DELETE2")
                                 self.sessions.remove(sesh)

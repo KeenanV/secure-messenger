@@ -23,10 +23,8 @@ class Server:
                                 "online": False}}
         with open("bobs.txt", "rb") as fp:
             bobs = fp.read()
-            print(bobs)
         with open("bobv.txt", "rb") as fp:
             bobv = fp.read()
-            print(bobv)
         with open("alices.txt", "rb") as fp:
             alices = fp.read()
         with open("alicev.txt", "rb") as fp:
@@ -62,12 +60,11 @@ class Server:
                 for user in logins:
                     if user[0] in self.users:
                         passwd = self.users[user[0]]['passwd']
-                        print(user[0])
-                        print(user[1])
-                        svr = srp.Verifier(user[0], passwd[0], passwd[1], user[1])
+                        svr = srp.Verifier('Bob', passwd[0], passwd[1], user[1])
                         ss, BB = svr.get_challenge()
+                        print(f"KEYS: {user[1]}")
                         self.pm.set_srp_verifier(user[0], svr)
-                        self.pm.queue(cPickle.dumps((ss, BB)), Flags.LOGIN, user[0])
+                        self.pm.queue((ss, BB), Flags.LOGIN, user[0])
                         self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
 
             print(f"msgs: {self.pm.get_msgs()}")
