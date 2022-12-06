@@ -303,3 +303,26 @@ class PacketManager:
     def organize(self):
         # TODO
         pass
+
+    def get_msgs(self, uid=None) -> list:
+        """
+        Returns a list of messages from a session or sessions.
+
+        :param uid: The uid of the user whose messages are wanted. Can be None for
+                    messages from all users
+        :return: If uid is specified, a list of all messages from users is returned.
+                 If uid is not specified, a list of tuples containing (<uid>, <data>)
+                 is returned
+        """
+        msgs = []
+        if uid is None:
+            for sesh in self.sessions:
+                for mm in sesh.msgs:
+                    msgs.append((sesh.uid, mm[1]))
+        else:
+            for sesh in self.sessions:
+                if sesh.uid == uid:
+                    for mm in sesh.msgs:
+                        msgs.append(mm[1])
+
+        return msgs
