@@ -376,7 +376,7 @@ class PacketManager:
         if uid is None:
             for sesh in self.sessions:
                 for mm in sesh.msgs:
-                    msgs.append((mm[0], mm[1]))
+                    msgs.append((sesh.uid, mm[1]))
         else:
             for sesh in self.sessions:
                 if sesh.uid == uid:

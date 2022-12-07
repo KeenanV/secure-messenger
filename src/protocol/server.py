@@ -1,27 +1,16 @@
 import os
 import socket
 import time
+from argparse import ArgumentParser
+from os.path import exists
 
 import srp
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-from cryptography.hazmat.backends import default_backend
 
-from packet import Flags
 import packet_manager
-from argparse import ArgumentParser
-import socket, string
-import random, os
-import packet, packet_manager
-from os.path import exists
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey, RSAPrivateKey
-from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives.serialization import Encoding
-from cryptography.hazmat.primitives.serialization import PublicFormat
-from cryptography.hazmat.primitives.serialization import PrivateFormat
+from packet import Flags
 
 
 class Server:
@@ -87,16 +76,24 @@ class Server:
             # for user in self.pm.get_list_requests():
             #     self.pm.queue(data=("list", list(self.users.keys)), flag=None, uid=user[0])
 
-            # for user in self.pm.get_connection_requests():
-            #     cid = self.generate_cid()
-            #     rand_str = os.urandom(16)
-            #     self.pm.queue(data=["connection requested:", user[0] cid, rand_str, self.users[user[0]]["addr"], self.users[user[0]]]["pub_key"]], 
-            #  flag=None, uid=user[1])
-            #     self.connections[cid] = {cid, (user[0], user[1], rand_str)}
-            # if "ok" in self.pm.get_msgs():
-            #   self.pm.queue(data=["connection initialized:", user[1], cid, rand_str, self.users[user[1]]["addr"], self.users[user[1]]]["pub_key"]], 
-            # flag=None, uid=user[0])
-            #   
+            for user in self.pm.get_connection_requests():
+                cid = self.generate_cid()
+                rand_str = str(os.urandom(16))
+                self.pm.queue(data=("connection requested:", user[0], cid, rand_str,
+                                    self.users[user[0]]["addr"],
+                                    self.users[user[0]]["pub_key"]),
+                              flag=None,
+                              uid=user[1])
+                self.connections[cid] = (user[0], user[1], rand_str, cid)
+
+            for conn in self.connections:
+                if "ok" in self.pm.get_msgs(conn[1]):
+                    self.pm.queue(data=("connection initialized:", conn[1],
+                                        conn[3], conn[2], self.users[conn[1]]["addr"],
+                                        self.users[conn[1]]["pub_key"]),
+                                  flag=None,
+                                  uid=conn[0])
+
 
 def check_fp(pub):
     if exists(pub):
