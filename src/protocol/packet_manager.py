@@ -103,8 +103,6 @@ class PacketManager:
                         packs=packs, msgs=[], nonces=[], handshook=False, initiator=True)
         self.sessions.append(sesh)
         uname, C = usrp.start_authentication()
-        print(f"uname: {uname}")
-        print(f"c: {C}")
         data = (uname, C, self.rsa_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
                                                                  format=serialization.PublicFormat.SubjectPublicKeyInfo))
         self.queue(data=data,
@@ -406,7 +404,7 @@ class PacketManager:
             for sesh in self.sessions:
                 msgs.append(len(sesh.packs.recvd))
                 for mm in sesh.msgs:
-                    msgs.append((mm[0], mm[1]))
+                    msgs.append((sesh.uid, mm[1]))
                 sesh.msgs.clear()
         else:
             for sesh in self.sessions:

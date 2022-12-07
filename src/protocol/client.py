@@ -6,6 +6,7 @@ import threading
 import time
 from argparse import ArgumentParser
 from os.path import exists
+import hashlib
 
 import srp
 from cryptography.hazmat.backends import default_backend
@@ -14,6 +15,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 import packet_manager
+from protocol.packet import Flags
+from protocol.packet_manager import SeshInfo
 
 
 class Client:
@@ -35,7 +38,8 @@ class Client:
         # thread2 = threading.Thread(target=self.usr_in)
         # thread1.start()
         # thread2.start()
-        self.run()
+        # self.run()
+        self.usr_in()
     
     def run(self):
         usr = srp.User('Bob', 'bobthebuilder')
@@ -44,29 +48,83 @@ class Client:
                             usrp=usr, pub_key=self.server_pub)
         while True:
             self.pm.run()
-            print(f"msgs: {self.pm.get_msgs()}")
+            if self.pm.get_msgs():
+                print(f"msgs: {self.pm.get_msgs()}")
+                if "connection" in self.pm.get_msgs("server"):
+                    response = self.pm.get_msgs("server")
+                    cid = None
+                    rand_str = None
+                    conn_addr = None
+                    conn_key = None
+                    initiated = None
+                    for packet in response:
+                        if "connection initialized:" in packet[1]:
+                            user = packet[1][1]
+                            cid = packet[1][2]
+                            rand_str = packet[1][3]
+                            conn_addr = packet[1][4]
+                            conn_key = packet[1][5]
+                            initiated = True
+                        if "connection requested:" in packet[1]:
+                            user = packet[1][1]
+                            cid = packet[1][2]
+                            rand_str = packet[1][3]
+                            conn_addr = packet[1][4]
+                            conn_key = packet[1][5]
+                            initiated = False
+                    if cid and rand_str and conn_addr and conn_key and initiated:
+                        self.pm.new_cc_sesh(self.name, cid, conn_addr, conn_key, initiated)
+                        if initiated:
+                            self.pm.queue(hashlib.sha256(rand_str), Flags.CR, user)
+                            if not self.pm.get_cr_msg(user) == hashlib.sha256(rand_str + 'a'):
+                                print("Session hash is not the same, your connection is not secure! Killing session.")
+                                self.pm.kill(user)
+                        else:
+                            self.pm.queue("ok", None, "server")
+                            self.pm.get_msgs(user)
+                            if not self.pm.get_cr_msg(user) == hashlib.sha256(rand_str):
+                                print("Session hash is not the same, your connection is not secure! Killing session.")
+                                self.pm.kill(user)
+                            self.pm.queue(hashlib.sha256(rand_str + 'a'), None, user)
+
+
             sys.stdout.flush()
             time.sleep(0.01)
 
     def usr_in(self):
+        # TEST
+        usr = srp.User(self.name, self.pw)
+        rand = random.SystemRandom()
+        self.pm.new_cs_sesh(rand.randint(10000000, 99999999), addr=("localhost", 1337),
+                            usrp=usr, pub_key=self.server_pub)
+         # TEST   
         usr_in = input("> ")
-        self.command(usr_in)
+        self.command(usr_in.split())
 
     def command(self, usr_in: str):
-        command = usr_in.split()
-        match command:
-            case ["connect", user, msg]:
+        print(usr_in)
+        match usr_in:
+            case ["connect", user]:
+                self.pm.queue("connect " + user, None, "server")
+                
+                #else:
+                #    self.command(["connect", user])
+
                 # This needs to ask the server first to get the addr, rsa, and cid
                 # self.pm.new_cc_sesh(self.name)  # have packet manager set up
-                pass
             case ["send", user, msg]:
-                self.pm.queue(msg, None, user)  # have packet manager set up
+                if self.pm.has_session(user):
+                    self.pm.queue(msg, None, user)
+                
             case ["list"]:
                 self.pm.queue("list", None, "server")  # list request flag
+                for msg in self.pm.get_msgs("server"):
+                    if "list" in msg[1]:
+                        print("List of users: " + msg[1][1])
             case ["logout"]:
                 exit(0)
             case _:
-                print("Unrecognized input: ", input)
+                print("Unrecognized input: ", usr_in)
 
 
 def check_fp(pub):
