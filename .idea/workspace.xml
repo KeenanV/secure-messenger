@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="b78cf464-f3ca-4205-b26a-2882be47925e" name="Changes" comment="Packet Manager">
+    <list default="true" id="b78cf464-f3ca-4205-b26a-2882be47925e" name="Changes" comment="SRP debugging">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/protocol/packet_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/protocol/packet_manager.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/protocol/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/protocol/server.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -20,7 +21,7 @@
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="master" />
+        <entry key="$PROJECT_DIR$" value="develop_noelle" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -129,7 +130,49 @@
       <option name="project" value="LOCAL" />
       <updated>1669561398453</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="Big merge">
+      <created>1670304453968</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1670304453968</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Dev for testing">
+      <created>1670305663466</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1670305663466</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Dev for testing progress">
+      <created>1670313320617</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1670313320618</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Dev for testing progress">
+      <created>1670360284689</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1670360284689</updated>
+    </task>
+    <task id="LOCAL-00008" summary="SRP debugging">
+      <created>1670368183108</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1670368183108</updated>
+    </task>
+    <task id="LOCAL-00009" summary="SRP debugging">
+      <created>1670370991321</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1670370991321</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -150,21 +193,14 @@
     <MESSAGE value="Protocol test" />
     <MESSAGE value="ECDH and docstrings" />
     <MESSAGE value="Packet Manager" />
-    <option name="LAST_COMMIT_MESSAGE" value="Packet Manager" />
-  </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/src/protocol/packet_manager.py</url>
-          <line>103</line>
-          <option name="timeStamp" value="17" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
+    <MESSAGE value="Big merge" />
+    <MESSAGE value="Dev for testing" />
+    <MESSAGE value="Dev for testing progress" />
+    <MESSAGE value="SRP debugging" />
+    <option name="LAST_COMMIT_MESSAGE" value="SRP debugging" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/messenger$test.coverage" NAME="test Coverage Results" MODIFIED="1669236842778" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src/protocol" />
-    <SUITE FILE_PATH="coverage/messenger$pm_test.coverage" NAME="pm test Coverage Results" MODIFIED="1669675535885" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src/protocol" />
+    <SUITE FILE_PATH="coverage/messenger$pm_test.coverage" NAME="pm test Coverage Results" MODIFIED="1670246975611" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src/protocol" />
   </component>
 </project>

@@ -290,16 +290,17 @@ class PacketManager:
                     if initiator:
                         if len(contents.frames['acks_recvd']) == 1:
                             usr: srp.User = sesh.shared_key
-                            M = usr.process_challenge(keys[0], keys[1])
+                            M = sesh.shared_key.process_challenge(keys[0], keys[1])
                             if M is None:
                                 print("DELETE")
                                 self.sessions.remove(sesh)
                                 return contents
                             self.queue(M, Flags.LOGIN, uid="server")
-                            print(f"ROUND 1 {keys[0]}\n{keys[1]}")
+                            # print(f"ROUND 1 {keys[0]}\n{keys[1]}")
                         elif len(contents.frames['acks_recvd']) == 2:
+                            print(f"HAMK: {keys}")
                             usr: srp.User = sesh.shared_key
-                            if usr.verify_session(keys) and usr.authenticated():
+                            if sesh.shared_key.verify_session(keys) and sesh.shared_key.authenticated():
                                 sesh.shared_key = usr.get_session_key()
                                 if sesh.shared_key is None:
                                     print("FAILED")
@@ -315,11 +316,13 @@ class PacketManager:
                         if len(contents.frames['acks_recvd']) == 1:
                             svr: srp.Verifier = sesh.shared_key
                             HAMK = svr.verify_session(keys)
+                            print(f"HAMK: {HAMK}")
                             if HAMK is None:
                                 print(f"DELETE3 {keys}")
                                 self.sessions.remove(sesh)
                                 return contents
                             if svr.authenticated():
+                                print("AUTH")
                                 sesh.shared_key = svr.get_session_key()
                                 sesh.handshook = True
                                 self.queue(HAMK, Flags.LOGIN, uid=sesh.uid)
@@ -391,12 +394,14 @@ class PacketManager:
                 msgs.append(len(sesh.packs.recvd))
                 for mm in sesh.msgs:
                     msgs.append((mm[0], mm[1]))
+                sesh.msgs.clear()
         else:
             for sesh in self.sessions:
                 msgs.append(len(sesh.packs.recvd))
                 if sesh.uid == uid:
                     for mm in sesh.msgs:
                         msgs.append(mm[1])
+                sesh.msgs.clear()
 
         return msgs
 

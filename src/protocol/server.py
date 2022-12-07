@@ -56,16 +56,15 @@ class Server:
 
             # already existing users
             logins = self.pm.get_login_requests()
-            if len(logins) >= 1:
-                for user in logins:
-                    if user[0] in self.users:
-                        passwd = self.users[user[0]]['passwd']
-                        svr = srp.Verifier('Bob', passwd[0], passwd[1], user[1])
-                        ss, BB = svr.get_challenge()
-                        print(f"KEYS: {user[1]}")
-                        self.pm.set_srp_verifier(user[0], svr)
-                        self.pm.queue((ss, BB), Flags.LOGIN, user[0])
-                        self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
+            for user in logins:
+                if user[0] in self.users:
+                    passwd = self.users[user[0]]['passwd']
+                    svr = srp.Verifier('Bob', passwd[0], passwd[1], user[1])
+                    ss, BB = svr.get_challenge()
+                    print(f"KEYS: {user[1]}")
+                    self.pm.set_srp_verifier(user[0], svr)
+                    self.pm.queue((ss, BB), Flags.LOGIN, user[0])
+                    self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
 
             print(f"msgs: {self.pm.get_msgs()}")
             time.sleep(0.01)
