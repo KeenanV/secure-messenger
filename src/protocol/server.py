@@ -85,7 +85,7 @@ class Server:
             #         self.users[user].update({"online": False, "session_key": None})
 
             # for user in self.pm.get_list_requests():
-            #     self.pm.queue(data=list(self.users.keys), flag=None, uid=user[0])
+            #     self.pm.queue(data=("list", list(self.users.keys)), flag=None, uid=user[0])
 
             # for user in self.pm.get_connection_requests():
             #     cid = self.generate_cid()

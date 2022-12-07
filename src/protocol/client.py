@@ -112,13 +112,18 @@ class Client:
                 # This needs to ask the server first to get the addr, rsa, and cid
                 # self.pm.new_cc_sesh(self.name)  # have packet manager set up
             case ["send", user, msg]:
-                self.pm.queue(msg, None, user)  # have packet manager set up
+                if self.pm.has_session(user):
+                    self.pm.queue(msg, None, user)
+                
             case ["list"]:
                 self.pm.queue("list", None, "server")  # list request flag
+                for msg in self.pm.get_msgs("server"):
+                    if "list" in msg[1]:
+                        print("List of users: " + msg[1][1])
             case ["logout"]:
                 exit(0)
             case _:
-                print("Unrecognized input: ", input)
+                print("Unrecognized input: ", usr_in)
 
 
 def check_fp(pub):
