@@ -3,6 +3,7 @@
 Client is started with ./client.py -usr [USERNAME] -pw [PASSWORD] -ip [IP] -port [PORT], with an optional -reg boolean flag to register a new user. Server is started with ./server.py and requires no input. The RSA key pair for the server is hardcoded and needs to be in the same directory.
 
 The two preregistered users are:
+
 user: alice, pass: alicesmalice
 
 user: bob, pass: bobthebuilder
