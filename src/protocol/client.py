@@ -15,8 +15,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 import packet_manager
-from protocol.packet import Flags
-from protocol.packet_manager import SeshInfo
+from packet import Flags
+from packet_manager import SeshInfo
 
 
 class Client:
@@ -39,7 +39,7 @@ class Client:
         # thread1.start()
         # thread2.start()
         # self.run()
-        self.usr_in()
+        # self.usr_in()
     
     def run(self):
         usr = srp.User(self.name, self.pw)
@@ -157,8 +157,11 @@ if __name__ == "__main__":
     parser.add_argument("-pw", type=str, required=True)
     parser.add_argument("-ip", type=str, required=True)
     parser.add_argument("-port", type=int, required=True)
-    parser.add_argument("-reg", type=str, required=False)
+    parser.add_argument("-reg", action='store_true', required=False)
 
     args = parser.parse_args()
     client = Client(args.usr, args.pw, args.reg, args.ip, args.port)
+    if args.reg:
+        print("Registering new user: " + args.usr + ".")
+        client.pm.queue([args.usr, args.pw, args.ip, args.port], Flags.REG, args.usr)
     client.run()
