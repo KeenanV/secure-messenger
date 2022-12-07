@@ -47,6 +47,13 @@ class Server:
             return cid
         else:
             return self.generate_cid()
+    
+    def online_users(self):
+        online = []
+        for user in self.users:
+            if user["online"] == True:
+                online.append(user)
+        return online
 
     def run(self): 
         while True:
@@ -65,6 +72,7 @@ class Server:
                     self.pm.set_srp_verifier(user[0], svr)
                     self.pm.queue((ss, BB), Flags.LOGIN, user[0])
                     self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
+                    self.users[user[0]]["online"] = True
 
             print(f"msgs: {self.pm.get_msgs()}")
             time.sleep(0.01)
@@ -74,7 +82,7 @@ class Server:
             #         self.users[user].update({"online": False, "session_key": None})
 
             # for user in self.pm.get_list_requests():
-            #     self.pm.queue(data=("list", list(self.users.keys)), flag=None, uid=user[0])
+            #     self.pm.queue(data=("list", online_users()), flag=None, uid=user[0])
 
             for user in self.pm.get_connection_requests():
                 cid = self.generate_cid()
