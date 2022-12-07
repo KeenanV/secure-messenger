@@ -300,8 +300,15 @@ class PacketManager:
                         elif len(contents.frames['acks_recvd']) == 2:
                             print(f"HAMK: {keys}")
                             usr: srp.User = sesh.shared_key
-                            if sesh.shared_key.verify_session(keys) and sesh.shared_key.authenticated():
-                                sesh.shared_key = usr.get_session_key()
+                            sesh.shared_key.verify_session(keys)
+                            if sesh.shared_key.authenticated():
+                                sk = usr.get_session_key()
+                                sesh.shared_key = HKDF(
+                                    algorithm=hashes.SHA256(),
+                                    length=32,
+                                    salt=None,
+                                    info=b'handshake',
+                                ).derive(sk)
                                 if sesh.shared_key is None:
                                     print("FAILED")
                                 else:
@@ -323,7 +330,13 @@ class PacketManager:
                                 return contents
                             if svr.authenticated():
                                 print("AUTH")
-                                sesh.shared_key = svr.get_session_key()
+                                sk = svr.get_session_key()
+                                sesh.shared_key = HKDF(
+                                    algorithm=hashes.SHA256(),
+                                    length=32,
+                                    salt=None,
+                                    info=b'handshake',
+                                ).derive(sk)
                                 sesh.handshook = True
                                 self.queue(HAMK, Flags.LOGIN, uid=sesh.uid)
                 else:
