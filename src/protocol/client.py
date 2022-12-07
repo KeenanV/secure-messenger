@@ -84,7 +84,7 @@ class Client:
                             if not self.pm.get_cr_msg(user) == hashlib.sha256(rand_str):
                                 print("Session hash is not the same, your connection is not secure! Killing session.")
                                 self.pm.kill(user)
-                            self.pm.queue(hashlib.sha256(rand_str + 'a'))
+                            self.pm.queue(hashlib.sha256(rand_str + 'a'), None, user)
 
 
             sys.stdout.flush()
