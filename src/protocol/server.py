@@ -90,11 +90,12 @@ class Server:
             # for user in self.pm.get_connection_requests():
             #     cid = self.generate_cid()
             #     str = os.urandom(16)
-            #     self.pm.queue(data=["connection initialized:", user[1], cid, str, self.users[user[1]]["addr"], self.users[user[1]]]["pub_key"]],
-            #  flag=None, uid=user[0])
             #     self.pm.queue(data=["connection requested:", user[0] cid, str, self.users[user[0]]["addr"], self.users[user[0]]]["pub_key"]], 
             #  flag=None, uid=user[1])
-            #     self.connections[cid] = {cid, (user[0], user[1])}
+            #     if "ok" in self.pm.get_msgs(user[1]):
+            #       self.pm.queue(data=["connection initialized:", user[1], cid, str, self.users[user[1]]["addr"], self.users[user[1]]]["pub_key"]],
+            #  flag=None, uid=user[0])
+            #       self.connections[cid] = {cid, (user[0], user[1])}
 
 def check_fp(pub):
     if exists(pub):

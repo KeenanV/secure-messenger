@@ -50,7 +50,7 @@ class Client:
             self.pm.run()
             if self.pm.get_msgs():
                 print(f"msgs: {self.pm.get_msgs()}")
-                if self.pm.get_msgs("server"):
+                if "connection" in self.pm.get_msgs("server"):
                     response = self.pm.get_msgs("server")
                     cid = None
                     rand_str = None
@@ -72,7 +72,7 @@ class Client:
                             conn_addr = packet[1][4]
                             conn_key = packet[1][5]
                             initiated = False
-                    if cid and rand_str and conn_addr and conn_key:
+                    if cid and rand_str and conn_addr and conn_key and initiated:
                         self.pm.new_cc_sesh(self.name, cid, conn_addr, conn_key, initiated)
                         if initiated:
                             self.pm.queue(hashlib.sha256(rand_str), Flags.CR, user)
@@ -80,6 +80,7 @@ class Client:
                                 print("Session hash is not the same, your connection is not secure! Killing session.")
                                 self.pm.kill(user)
                         else:
+                            self.pm.queue("ok", None, "server")
                             self.pm.get_msgs(user)
                             if not self.pm.get_cr_msg(user) == hashlib.sha256(rand_str):
                                 print("Session hash is not the same, your connection is not secure! Killing session.")
