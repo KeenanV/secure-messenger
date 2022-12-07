@@ -4,7 +4,6 @@ import time
 import _pickle as cPickle
 
 import srp
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
@@ -60,14 +59,11 @@ class Server:
             for user in logins:
                 if user[0] in self.users:
                     passwd = self.users[user[0]]['passwd']
-                    svr = srp.Verifier('Bob', passwd[0], passwd[1], user[1])
+                    svr = srp.Verifier(user[0], passwd[0], passwd[1], user[1])
                     ss, BB = svr.get_challenge()
                     self.pm.set_srp_verifier(user[0], svr)
                     self.pm.queue((ss, BB), Flags.LOGIN, user[0])
                     self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
-
-            print(f"msgs: {self.pm.get_msgs()}")
-            time.sleep(0.01)
 
             # for user in self.pm.get_logoff_requests():
             #     if not False in self.users[user[0]]:
@@ -77,8 +73,9 @@ class Server:
             #     self.pm.queue(data=("list", list(self.users.keys)), flag=None, uid=user[0])
 
             for user in self.pm.get_connection_requests():
+                print(f"REQUEST: {user}")
                 cid = self.generate_cid()
-                rand_str = str(os.urandom(16))
+                rand_str = os.urandom(16)
                 self.pm.queue(data=("connection requested:", user[0], cid, rand_str,
                                     self.users[user[0]]["addr"],
                                     self.users[user[0]]["pub_key"]),
@@ -86,13 +83,20 @@ class Server:
                               uid=user[1])
                 self.connections[cid] = (user[0], user[1], rand_str, cid)
 
-            for conn in self.connections:
-                if "ok" in self.pm.get_msgs(conn[1]):
-                    self.pm.queue(data=("connection initialized:", conn[1],
-                                        conn[3], conn[2], self.users[conn[1]]["addr"],
-                                        self.users[conn[1]]["pub_key"]),
-                                  flag=None,
-                                  uid=conn[0])
+            for kk, conn in self.connections.items():
+                # print(f"checking: {conn}")
+                for msg in self.pm.get_msgs(conn[1]):
+                    print(f"MSG: {msg}")
+                    if msg == "ok":
+                        print("PART TWO")
+                        self.pm.queue(data=("connection initialized:", conn[1], conn[3], conn[2],
+                                            self.users[conn[1]]["addr"],
+                                            self.users[conn[1]]["pub_key"]),
+                                      flag=None,
+                                      uid=conn[0])
+
+            self.pm.get_msgs()
+            time.sleep(0.01)
 
 
 if __name__ == "__main__":

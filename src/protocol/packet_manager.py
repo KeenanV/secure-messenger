@@ -33,7 +33,7 @@ class PackInfo:
 @dataclass
 class SeshInfo:
     uid: str
-    cid: int
+    cid: bytes
     addr: tuple[str, int]
     shared_key: bytes | srp.User | srp.Verifier
     pub_key: RSAPublicKey
@@ -42,6 +42,7 @@ class SeshInfo:
     nonces: list[bytes]
     handshook: bool
     initiator: bool
+    cr_ready: bool
 
 
 class PacketManager:
@@ -62,7 +63,7 @@ class PacketManager:
                 time.sleep(0.001)
             sesh.packs.unsent.clear()
 
-    def new_cc_sesh(self, uid: str, cid: int, addr: tuple[str, int], pub_key: RSAPublicKey, initiator: bool):
+    def new_cc_sesh(self, uid: str, cid: bytes, addr: tuple[str, int], pub_key: RSAPublicKey, initiator: bool):
         """
         Creates a new client-client session over ECDH with the handshake being conducted
         with hybrid encryption with RSA and AES.
@@ -78,7 +79,7 @@ class PacketManager:
         pb = priv.private_bytes(Encoding.DER, PrivateFormat.PKCS8, serialization.NoEncryption())
         packs = PackInfo(sent=[], recvd=[], unsent=[], time_recvd=0.0, pnum=0)
         sesh = SeshInfo(uid=uid, cid=cid, addr=addr, shared_key=pb, pub_key=pub_key,
-                        packs=packs, msgs=[], nonces=[], handshook=False, initiator=initiator)
+                        packs=packs, msgs=[], nonces=[], handshook=False, initiator=initiator, cr_ready=False)
         self.sessions.append(sesh)
 
         if initiator:
@@ -87,7 +88,7 @@ class PacketManager:
                        flag=Flags.HELLO,
                        uid=uid)
 
-    def new_cs_sesh(self, cid: int, addr: tuple[str, int], usrp: srp.User, pub_key: RSAPublicKey):
+    def new_cs_sesh(self, cid: bytes, addr: tuple[str, int], usrp: srp.User, pub_key: RSAPublicKey):
         """
         Creates a new client-server session over SRP with the handshake being conducted
         with hybrid encryption with RSA and AES.
@@ -100,7 +101,7 @@ class PacketManager:
         """
         packs = PackInfo(sent=[], recvd=[], unsent=[], time_recvd=0.0, pnum=0)
         sesh = SeshInfo(uid="server", cid=cid, addr=addr, shared_key=usrp, pub_key=pub_key,
-                        packs=packs, msgs=[], nonces=[], handshook=False, initiator=True)
+                        packs=packs, msgs=[], nonces=[], handshook=False, initiator=True, cr_ready=False)
         self.sessions.append(sesh)
         uname, C = usrp.start_authentication()
         data = (uname, C, self.rsa_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
@@ -135,7 +136,7 @@ class PacketManager:
                 sesh.packs.unsent.append((contents.pnum, pack))
                 break
 
-    def __send(self, cid: int, pack: Packet):
+    def __send(self, cid: bytes, pack: Packet):
         """
         Sends packet over the session associated with the given CID
 
@@ -165,6 +166,8 @@ class PacketManager:
                                                                          algorithm=hashes.SHA256(),
                                                                          label=None))
                 if Flags.HELLO in contents.flags or Flags.LOGIN in contents.flags or Flags.REG in contents.flags:
+                    if Flags.CR in contents.flags:
+                        sesh.cr_ready = False
                     temp_key = AESGCM.generate_key(128)
                     aesgcm = AESGCM(temp_key)
                     ct = aesgcm.encrypt(pack.nonce, cPickle.dumps(contents), None)
@@ -196,6 +199,7 @@ class PacketManager:
         for conn in msgs:
             data, addr = conn.recvfrom(4096)
             pack: Packet = cPickle.loads(data)
+            # print(f"PACK: {pack}")
             exists = False
             for sesh in self.sessions:
                 # print(pack)
@@ -207,12 +211,12 @@ class PacketManager:
                                                      padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
                                                                   algorithm=hashes.SHA256(),
                                                                   label=None))
-                        print("NONCE")
                         if nonce in sesh.nonces:
                             break
                         print("yes")
                         aesgcm = AESGCM(sesh.shared_key)
                         contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, pack.encrypted, None))
+                        # print(f"CONTENTS: {contents}")
                         sesh.nonces.append(nonce)
                     else:
                         tup: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
@@ -247,16 +251,22 @@ class PacketManager:
                     if Flags.BYE in contents.flags:
                         self.sessions.remove(sesh)
                         break
+                    if Flags.CR in contents.flags:
+                        sesh.msgs.append((Flags.CR, contents.data))
 
-                    if not contents.flags or Flags.CR in contents.flags:
+                    print(f"CONTENTS: {contents.flags[0]}")
+                    if contents.flags[0] is None:
+                        print("APPENDED")
                         sesh.msgs.append((contents.pnum, contents.data))
+                    else:
+                        print(f"FLAGS: {contents.flags}")
                     break
 
             if not exists:
                 contents: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
                 self.__complete_handshake(pack, contents, False)
 
-    def __elicit(self, cid: int):
+    def __elicit(self, cid: bytes):
         # TODO
         pass
 
@@ -287,7 +297,6 @@ class PacketManager:
                 if Flags.LOGIN in contents.flags:
                     if initiator:
                         if len(contents.frames['acks_recvd']) == 1:
-                            usr: srp.User = sesh.shared_key
                             M = sesh.shared_key.process_challenge(keys[0], keys[1])
                             if M is None:
                                 print("DELETE")
@@ -297,10 +306,9 @@ class PacketManager:
                             # print(f"ROUND 1 {keys[0]}\n{keys[1]}")
                         elif len(contents.frames['acks_recvd']) == 2:
                             print(f"HAMK: {keys}")
-                            usr: srp.User = sesh.shared_key
                             sesh.shared_key.verify_session(keys)
                             if sesh.shared_key.authenticated():
-                                sk = usr.get_session_key()
+                                sk = sesh.shared_key.get_session_key()
                                 sesh.shared_key = HKDF(
                                     algorithm=hashes.SHA256(),
                                     length=32,
@@ -350,6 +358,7 @@ class PacketManager:
                         ).derive(shared_key)
                         sesh.shared_key = derived_key
                         sesh.handshook = True
+                        sesh.cr_ready = True
                         # print(f"Message: Hello {keys[0]}, I'm {self.uid}.")
                         self.queue(f"Hello {keys[0]}, I'm {self.uid}.", flag=None, uid=sesh.uid)
                     else:
@@ -377,7 +386,7 @@ class PacketManager:
             packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[], time_recvd=time.time(), pnum=0)
             sesh = SeshInfo(uid=keys[0], cid=pack.cid, addr=pack.src, shared_key=b'',
                             pub_key=serialization.load_pem_public_key(keys[2],), packs=packs,
-                            msgs=[(Flags.LOGIN, keys[1])], nonces=[], handshook=False, initiator=False)
+                            msgs=[(Flags.LOGIN, keys[1])], nonces=[], handshook=False, initiator=False, cr_ready=False)
             rand = random.SystemRandom()
             contents.pnum = rand.randint(1000, 9999)
             sesh.packs.pnum = contents.pnum
@@ -408,7 +417,7 @@ class PacketManager:
                 sesh.msgs.clear()
         else:
             for sesh in self.sessions:
-                msgs.append(len(sesh.packs.recvd))
+                # msgs.append(len(sesh.packs.recvd))
                 if sesh.uid == uid:
                     for mm in sesh.msgs:
                         msgs.append(mm[1])
@@ -425,11 +434,50 @@ class PacketManager:
                         msgs.append((sesh.uid, msg[1]))
         return msgs
 
-    def get_pub(self, uid: str) -> RSAPublicKey | None:
+    def get_connection_requests(self):
+        msgs = []
+        for sesh in self.sessions:
+            for msg in sesh.msgs:
+                print(f"CONNECTION?: {msg}")
+                if isinstance(msg[1], tuple):
+                    print("REQUEST")
+                    if "connect" == msg[1][0]:
+                        msgs.append((sesh.uid, msg[1][1]))
+        return msgs
+
+    def get_cr_msg(self, uid: str):
         for sesh in self.sessions:
             if uid == sesh.uid:
-                return sesh.pub_key
+                for msg in sesh.msgs:
+                    if msg[0] == Flags.CR:
+                        sesh.msgs.remove(msg)
+                        return msg[1]
         return None
+
+    def get_pub(self, uid: str) -> bytes | None:
+        for sesh in self.sessions:
+            if uid == sesh.uid:
+                return sesh.pub_key.public_bytes(encoding=serialization.Encoding.PEM,
+                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        return None
+
+    def get_cr_ready(self, uid: str) -> bool:
+        for sesh in self.sessions:
+            if uid == sesh.uid:
+                return sesh.cr_ready
+        return False
+
+    def hash_session(self, uid: str) -> bool:
+        for sesh in self.sessions:
+            if uid == sesh.uid:
+                return True
+        return False
+
+    def kill(self, uid: str):
+        for sesh in self.sessions:
+            if uid == sesh.uid:
+                self.sessions.remove(sesh)
+                return
 
     def set_srp_verifier(self, uid: str, svr: srp.Verifier):
         for sesh in self.sessions:

@@ -20,7 +20,7 @@ class Flags(Enum):
 class Packet:
     src: tuple[str, int]
     dest: tuple[str, int]
-    cid: int
+    cid: bytes
     nonce: bytes
     encrypted: bytes
 

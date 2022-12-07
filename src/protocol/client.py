@@ -10,17 +10,17 @@ import hashlib
 
 import srp
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 import packet_manager
-from protocol.packet import Flags
-from protocol.packet_manager import SeshInfo
+from packet import Flags
 
 
 class Client:
     def __init__(self, name: str, password: str, reg: bool, ip: str, port: int):
+        self.start_time = time.time()
         self.reg = reg
         self.ss = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.ss.bind((ip, port))  # localhost for testing
@@ -39,63 +39,76 @@ class Client:
         # thread1.start()
         # thread2.start()
         # self.run()
-        self.usr_in()
+        # self.usr_in()
     
     def run(self):
-        usr = srp.User('Bob', 'bobthebuilder')
-        rand = random.SystemRandom()
-        self.pm.new_cs_sesh(rand.randint(10000000, 99999999), addr=("localhost", 1337),
+        usr = srp.User(self.name, self.pw)
+        handshakes = []
+        self.pm.new_cs_sesh(os.urandom(16), addr=("localhost", 1337),
                             usrp=usr, pub_key=self.server_pub)
         while True:
             self.pm.run()
-            if self.pm.get_msgs():
-                print(f"msgs: {self.pm.get_msgs()}")
-                if "connection" in self.pm.get_msgs("server"):
-                    response = self.pm.get_msgs("server")
-                    cid = None
-                    rand_str = None
-                    conn_addr = None
-                    conn_key = None
-                    initiated = None
-                    for packet in response:
-                        if "connection initialized:" in packet[1]:
-                            user = packet[1][1]
-                            cid = packet[1][2]
-                            rand_str = packet[1][3]
-                            conn_addr = packet[1][4]
-                            conn_key = packet[1][5]
-                            initiated = True
-                        if "connection requested:" in packet[1]:
-                            user = packet[1][1]
-                            cid = packet[1][2]
-                            rand_str = packet[1][3]
-                            conn_addr = packet[1][4]
-                            conn_key = packet[1][5]
-                            initiated = False
-                    if cid and rand_str and conn_addr and conn_key and initiated:
-                        self.pm.new_cc_sesh(self.name, cid, conn_addr, conn_key, initiated)
+            # print(f"msgs: {self.pm.get_msgs()}")
+            svr = self.pm.get_msgs("server")
+            for msg in svr:
+                if isinstance(msg, tuple) and "connection" in msg[0]:
+                    user = msg[1]
+                    cid = msg[2]
+                    rand_str = msg[3]
+                    conn_addr = msg[4]
+                    conn_key = serialization.load_pem_public_key(msg[5],)
+                    initiated = False
+                    if "connection initialized:" in msg[0]:
+                        initiated = True
+                    if cid and rand_str and conn_addr and conn_key:
                         if initiated:
-                            self.pm.queue(hashlib.sha256(rand_str), Flags.CR, user)
-                            if not self.pm.get_cr_msg(user) == hashlib.sha256(rand_str + 'a'):
-                                print("Session hash is not the same, your connection is not secure! Killing session.")
-                                self.pm.kill(user)
+                            self.pm.new_cc_sesh(user, cid, conn_addr, conn_key, initiated)
                         else:
                             self.pm.queue("ok", None, "server")
-                            self.pm.get_msgs(user)
-                            if not self.pm.get_cr_msg(user) == hashlib.sha256(rand_str):
-                                print("Session hash is not the same, your connection is not secure! Killing session.")
-                                self.pm.kill(user)
-                            self.pm.queue(hashlib.sha256(rand_str + 'a'), None, user)
+                        handshakes.append((user, rand_str, initiated))
 
+            for usr in handshakes:
+                if self.pm.get_cr_ready(usr[0]):
+                    chall = hashes.Hash(hashes.SHA256())
+                    chall.update(usr[1])
+                    self.pm.queue(chall.finalize(), Flags.CR, usr[0])
+                cr = self.pm.get_cr_msg(usr[0])
+                if cr is not None:
+                    base = hashes.Hash(hashes.SHA256())
+                    base.update(usr[1])
+                    challenge = base.finalize()
+                    resp = hashes.Hash(hashes.SHA256())
+                    resp.update(usr[1] + b'a')
+                    response = resp.finalize()
+                    if usr[2]:
+                        if response != cr:
+                            self.pm.kill(usr[0])
+                            handshakes.remove(usr)
+                            print("CR FAIL")
+                            continue
+                        handshakes.remove(usr)
+                        print("CR SUCCESS")
+                    else:
+                        if challenge != cr:
+                            self.pm.kill(usr[0])
+                            handshakes.remove(usr)
+                            print("CR FAIL")
+                            continue
+                        self.pm.queue(response, Flags.CR, usr[0])
+                        handshakes.remove(usr)
+                        print("CR SUCCESS")
 
+            if self.name == "Bob" and self.start_time != 0.0 and time.time() - self.start_time >= 5:
+                self.pm.queue(("connect", "Alice",), None, "server")
+                self.start_time = 0.0
+                print("CONNECTING")
             sys.stdout.flush()
             time.sleep(0.01)
 
     def usr_in(self):
         # TEST
         usr = srp.User(self.name, self.pw)
-        rand = random.SystemRandom()
-        self.pm.new_cs_sesh(rand.randint(10000000, 99999999), addr=("localhost", 1337),
+        self.pm.new_cs_sesh(os.urandom(16), addr=("localhost", 1337),
                             usrp=usr, pub_key=self.server_pub)
          # TEST   
         usr_in = input("> ")
@@ -105,7 +118,7 @@ class Client:
         print(usr_in)
         match usr_in:
             case ["connect", user]:
-                self.pm.queue("connect " + user, None, "server")
+                self.pm.queue(("connect",  user), None, "server")
                 
                 #else:
                 #    self.command(["connect", user])
@@ -113,7 +126,7 @@ class Client:
                 # This needs to ask the server first to get the addr, rsa, and cid
                 # self.pm.new_cc_sesh(self.name)  # have packet manager set up
             case ["send", user, msg]:
-                if self.pm.has_session(user):
+                if self.pm.hash_session(user):
                     self.pm.queue(msg, None, user)
                 
             case ["list"]:
