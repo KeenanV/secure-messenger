@@ -53,6 +53,7 @@ class Client:
             for msg in svr:
                 if isinstance(msg, tuple) and "connection" in msg[0]:
                     user = msg[1]
+                    print(f"USER: {user}")
                     cid = msg[2]
                     rand_str = msg[3]
                     conn_addr = msg[4]
@@ -61,8 +62,9 @@ class Client:
                     if "connection initialized:" in msg[0]:
                         initiated = True
                     if cid and rand_str and conn_addr and conn_key:
+                        self.pm.new_cc_sesh(user, cid, conn_addr, conn_key, initiated)
                         if initiated:
-                            self.pm.new_cc_sesh(user, cid, conn_addr, conn_key, initiated)
+                            print(f"STARTED: {user}, {conn_addr}")
                         else:
                             self.pm.queue("ok", None, "server")
                         handshakes.append((user, rand_str, initiated))
@@ -72,6 +74,7 @@ class Client:
                     chall = hashes.Hash(hashes.SHA256())
                     chall.update(usr[1])
                     self.pm.queue(chall.finalize(), Flags.CR, usr[0])
+                    self.pm.set_cr_ready(usr[0], False)
                 cr = self.pm.get_cr_msg(usr[0])
                 if cr is not None:
                     base = hashes.Hash(hashes.SHA256())
@@ -102,6 +105,8 @@ class Client:
                 self.pm.queue(("connect", "Alice",), None, "server")
                 self.start_time = 0.0
                 print("CONNECTING")
+
+            self.pm.get_msgs()
             sys.stdout.flush()
             time.sleep(0.01)
 
