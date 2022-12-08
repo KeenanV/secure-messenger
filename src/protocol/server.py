@@ -48,11 +48,20 @@ class Server:
 
     def run(self): 
         while True:
-            self.pm.run()
-            # registration for new users
-            # for user in self.pm.get_reg_requests():
-            #     if user[1][0] not in self.users:
-            #         self.users[user[1][0]] = {"public_key": user[1][0], "g_w": user[1][1]}
+            reg = self.pm.run()
+            if reg is not None:
+                uname = reg[1][0]
+                salt = reg[1][1]
+                vkey = reg[1][2]
+                cid = reg[2]
+                addr = reg[0]
+                if uname not in self.users:
+                    self.users[uname] = {"pub_key": None, "passwd": (salt, vkey), "addr": addr, "online": False}
+                    self.pm.queue("ok", Flags.REG, uname, addr, cid)
+                    print("USER ADDED")
+                else:
+                    self.pm.queue("bad user", Flags.REG, "", addr, cid)
+                    print("USER FAILED")
 
             # already existing users
             logins = self.pm.get_login_requests()
@@ -95,7 +104,11 @@ class Server:
                                       flag=None,
                                       uid=conn[0])
 
-            self.pm.get_msgs()
+            for msg in self.pm.get_msgs():
+                if msg[1] == "list":
+                    data = ("list", "User: " + "\nUser: ".join(self.users.keys()))
+                    self.pm.queue(data=data, flag=None, uid=msg[0])
+
             time.sleep(0.01)
 
 
