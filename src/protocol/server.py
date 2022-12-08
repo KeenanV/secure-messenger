@@ -45,6 +45,14 @@ class Server:
             return cid
         else:
             return self.generate_cid()
+    
+    def sort_online(self):
+        online = []
+        for user in self.users:
+            if self.users[user]['online'] == True:
+                online.append(user)
+        data = ("list", "User: " + "\nUser: ".join(online))
+        return data
 
     def run(self): 
         while True:
@@ -73,6 +81,7 @@ class Server:
                     self.pm.set_srp_verifier(user[0], svr)
                     self.pm.queue((ss, BB), Flags.LOGIN, user[0])
                     self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
+                    self.users[user[0]]['online'] = True
 
             # for user in self.pm.get_logoff_requests():
             #     if not False in self.users[user[0]]:
@@ -106,9 +115,8 @@ class Server:
 
             for msg in self.pm.get_msgs():
                 if msg[1] == "list":
-                    data = ("list", "User: " + "\nUser: ".join(self.users.keys()))
-                    self.pm.queue(data=data, flag=None, uid=msg[0])
-                if msg[1] == "logout":
+                    self.pm.queue(data=self.sort_online(), flag=None, uid=msg[0])
+                elif msg[1] == "logout":
                     self.users[msg[0]]['online'] = False
 
             time.sleep(0.01)
