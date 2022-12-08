@@ -137,7 +137,7 @@ class Client:
             #     print("CONNECTING")
 
             for msg in self.pm.get_msgs():
-                print(f"Message from {msg}:")
+                print(f"Message from {msg[0]}:")
                 print(f"{msg[1]}\n\n")
 
             sys.stdout.flush()
@@ -158,6 +158,11 @@ class Client:
 
     def command(self, usr_in: list[str]):
         # print(usr_in)
+        msg = ''
+        if len(usr_in) >= 3:
+            msg = ' '.join(usr_in[2:])
+            usr_in = [usr_in[0], usr_in[1]]
+
         match usr_in:
             case ["connect", user]:
                 self.pm.queue(("connect",  user), None, "server")
@@ -167,7 +172,7 @@ class Client:
 
                 # This needs to ask the server first to get the addr, rsa, and cid
                 # self.pm.new_cc_sesh(self.name)  # have packet manager set up
-            case ["send", user, msg]:
+            case ["send", user]:
                 if self.pm.hash_session(user):
                     self.pm.queue(msg, None, user)
                 
