@@ -179,6 +179,7 @@ class Client:
             case ["list"]:
                 self.pm.queue("list", None, "server")  # list request flag
             case ["logout"]:
+                self.pm.queue("logout", None, "server")
                 exit(0)
             case _:
                 print("Unrecognized input: ", usr_in)

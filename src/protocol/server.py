@@ -108,6 +108,8 @@ class Server:
                 if msg[1] == "list":
                     data = ("list", "User: " + "\nUser: ".join(self.users.keys()))
                     self.pm.queue(data=data, flag=None, uid=msg[0])
+                if msg[1] == "logout":
+                    self.users[msg[0]]['online'] = False
 
             time.sleep(0.01)
 
