@@ -47,6 +47,7 @@ class Client:
         self.pm = packet_manager.PacketManager(uid=self.name, sock=self.ss, port=self.port, rsa_key=self.rsa_priv)
         if reg:
             self.run_reg()
+            sys.exit()
         else:
             self.thread2 = threading.Thread(target=self.usr_in)
             self.thread2.start()
@@ -64,7 +65,7 @@ class Client:
             msg = self.pm.get_reg_msg()
             if msg == "ok":
                 # write to disk
-                exit(0)
+                sys.exit()
             elif msg == "bad user":
                 print("Username already taken. Try again")
                 break
@@ -151,9 +152,11 @@ class Client:
          # TEST
         while True:
             usr_in = input("> ")
+            """
             if usr_in == "logout":
                 print("logging out")
-                exit(0)
+                sys.exit()
+            """
             self.command(usr_in.split())
 
     def command(self, usr_in: list[str]):
@@ -179,8 +182,9 @@ class Client:
             case ["list"]:
                 self.pm.queue("list", None, "server")  # list request flag
             case ["logout"]:
+                print("Logging out...")
                 self.pm.queue("logout", None, "server")
-                exit(0)
+                sys.exit()
             case _:
                 print("Unrecognized input: ", usr_in)
 
