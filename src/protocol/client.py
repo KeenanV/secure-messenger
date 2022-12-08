@@ -64,7 +64,7 @@ class Client:
             msg = self.pm.get_reg_msg()
             if msg == "ok":
                 # write to disk
-                break
+                exit(0)
             elif msg == "bad user":
                 print("Username already taken. Try again")
                 break
