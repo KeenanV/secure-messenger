@@ -1,11 +1,12 @@
 # secure-messenger
 
 ## Running the client
-Client is started with ./client.py [-usr USERNAME] [-pw PASSWORD] [-ip IP] [-port PORT] [-reg], where
+Client is started with ./client [-usr USERNAME] [-pw PASSWORD] [-ip IP] [-port PORT] [-reg], where
 -reg is an optional boolean flag to register a new user. Server is started with ./server.py and requires 
 no input. The RSA key pair for the server is hardcoded and needs to be in the same directory. 
 The "&lt;usr>s.txt" and "&lt;usr>v.txt" files for Alice, Bob, Charlie, and Dave as well as "users.txt" are
-needed but can be ignored.
+needed but can be ignored. Additionally, there must be a "serve_pub.pem" file in the same directory before
+running
 
 ## Users
 The four preregistered users are:
@@ -24,6 +25,6 @@ Once a client is started, there are four commands: *list*, which lists all signe
 a message via an existing connection, and *logout*, which logs out of the account.
 
 ## Server info
-The server will back up the directory of users to disk, so the server going down will not remove 
-all non-hardcoded registrations. We recommend that the server not be remotely accessible over SSH,
-FTP or the like for security reasons.
+The server can be started with ./server and will back up the directory of users to disk, so the server 
+going down will not remove all non-hardcoded registrations. We recommend that the server not be remotely 
+accessible over SSH, FTP or the like for security reasons. Finally, "serve_priv.pem" must be in the same directory
