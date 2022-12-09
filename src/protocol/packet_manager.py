@@ -323,13 +323,10 @@ class PacketManager:
                         if len(contents.frames['acks_recvd']) == 1:
                             M = sesh.shared_key.process_challenge(keys[0], keys[1])
                             if M is None:
-                                # print("DELETE")
                                 self.sessions.remove(sesh)
                                 return contents
                             self.queue(M, Flags.LOGIN, uid="server")
-                            # print(f"ROUND 1 {keys[0]}\n{keys[1]}")
                         elif len(contents.frames['acks_recvd']) == 2:
-                            # print(f"HAMK: {keys}")
                             sesh.shared_key.verify_session(keys)
                             if sesh.shared_key.authenticated():
                                 sk = sesh.shared_key.get_session_key()
@@ -344,7 +341,6 @@ class PacketManager:
                                 sesh.handshook = True
                                 self.queue(str(os.urandom(12)), Flags.CR, uid="server")
                             else:
-                                # print("DELETE2")
                                 self.sessions.remove(sesh)
                                 return contents
                     else:
@@ -476,7 +472,6 @@ class PacketManager:
             if uid == sesh.uid:
                 for msg in sesh.msgs:
                     if msg[0] == Flags.CR:
-                        # print("adding")
                         sesh.msgs.remove(msg)
                         return msg[1]
         return None

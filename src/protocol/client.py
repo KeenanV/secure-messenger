@@ -66,13 +66,11 @@ class Client:
                 raise SystemExit()
 
             self.pm.run()
-            # print(f"msgs: {self.pm.get_msgs()}")
             svr = self.pm.get_msgs("server")
             for msg in svr:
                 if isinstance(msg, tuple):
                     if "connection" in msg[0]:
                         user = msg[1]
-                        # print(f"USER: {user}")
                         cid = msg[2]
                         rand_str = msg[3]
                         conn_addr = msg[4]
@@ -107,24 +105,15 @@ class Client:
                         if response != cr:
                             self.pm.kill(usr[0])
                             handshakes.remove(usr)
-                            # print("CR FAIL")
                             continue
                         handshakes.remove(usr)
-                        # print("CR SUCCESS")
                     else:
                         if challenge != cr:
                             self.pm.kill(usr[0])
                             handshakes.remove(usr)
-                            # print("CR FAIL")
                             continue
                         self.pm.queue(response, Flags.CR, usr[0])
                         handshakes.remove(usr)
-                        # print("CR SUCCESS")
-
-            # if self.name == "Bob" and self.start_time != 0.0 and time.time() - self.start_time >= 5:
-            #     self.pm.queue(("connect", "Alice",), None, "server")
-            #     self.start_time = 0.0
-            #     print("CONNECTING")
 
             for msg in self.pm.get_msgs():
                 print(f"Message from {msg[0]}:")
@@ -134,11 +123,6 @@ class Client:
             time.sleep(0.01)
 
     def usr_in(self):
-        # TEST
-        # usr = srp.User(self.name, self.pw)
-        # self.pm.new_cs_sesh(os.urandom(16), addr=("localhost", 1337),
-        #                     usrp=usr, pub_key=self.server_pub)
-         # TEST
         while True:
             usr_in = input("> ")
 
@@ -149,7 +133,6 @@ class Client:
             self.command(usr_in.split())
 
     def command(self, usr_in: list[str]):
-        # print(usr_in)
         msg = ''
         if len(usr_in) >= 3:
             msg = ' '.join(usr_in[2:])
@@ -158,12 +141,6 @@ class Client:
         match usr_in:
             case ["connect", user]:
                 self.pm.queue(("connect",  user), None, "server")
-                
-                #else:
-                #    self.command(["connect", user])
-
-                # This needs to ask the server first to get the addr, rsa, and cid
-                # self.pm.new_cc_sesh(self.name)  # have packet manager set up
             case ["send", user]:
                 if self.pm.hash_session(user):
                     self.pm.queue(msg, None, user)
@@ -188,4 +165,3 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     client = Client(args.usr, args.pw, args.reg, args.ip, args.port)
-    # client.run()
