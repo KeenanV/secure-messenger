@@ -1,15 +1,11 @@
 import os
-import random
 import socket
 import sys
 import threading
 import time
 from argparse import ArgumentParser
-from os.path import exists
-import hashlib
 
 import srp
-from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
@@ -45,13 +41,16 @@ class Client:
         self.pm.new_cs_sesh(os.urandom(16), addr=("localhost", 1337),
                             usrp=None, pub_key=self.server_pub, reg=True)
         salt, vkey = srp.create_salted_verification_key(self.name, self.pw)
-        self.pm.queue((self.name, salt, vkey), flag=Flags.REG, uid="server")
+        pub = self.rsa_priv.public_key().public_bytes(encoding=serialization.Encoding.PEM,
+                                                      format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        self.pm.queue((self.name, salt, vkey, pub), flag=Flags.REG, uid="server")
 
         while True:
             self.pm.run()
 
             msg = self.pm.get_reg_msg()
             if msg == "ok":
+                print("Congrats you're registered! Now log in")
                 break
             elif msg == "bad user":
                 print("Username already taken. Try again")

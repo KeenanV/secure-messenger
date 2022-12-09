@@ -1,7 +1,6 @@
 import os
 import socket
 import time
-import _pickle as cPickle
 
 import srp
 from cryptography.hazmat.primitives import serialization
@@ -13,25 +12,20 @@ from packet import Flags
 
 class Server:
     def __init__(self, rsa_key: RSAPrivateKey):
-        self.users = {"Bob": {"pub_key": None,
-                              "passwd": ...,
-                              "addr": ("localhost", 1340),
-                              "online": False},
-                      "Alice": {"pub_key": None,
-                                "passwd": ...,
-                                "addr": ("localhost", 1350),
-                                "online": False}}
-        with open("bobs.txt", "rb") as fp:
-            bobs = fp.read()
-        with open("bobv.txt", "rb") as fp:
-            bobv = fp.read()
-        with open("alices.txt", "rb") as fp:
-            alices = fp.read()
-        with open("alicev.txt", "rb") as fp:
-            alicev = fp.read()
-        self.users['Bob']['passwd'] = (bobs, bobv)
-        self.users['Alice']['passwd'] = (alices, alicev)
+        self.users = {}
 
+        with open("users.txt", "r") as fp:
+            unames = fp.readlines()
+
+        for usr in unames:
+            with open(usr[:len(usr)-1] + "s.txt", "rb") as fp:
+                salt = fp.read()
+            with open(usr[:len(usr)-1] + "v.txt", "rb") as fp:
+                vkey = fp.read()
+            self.users[usr[:len(usr)-1]] = {"pub_key": None,
+                                            "passwd": (salt, vkey),
+                                            "addr": None,
+                                            "online": False}
         self.connections = {}
         self.rsa_key = rsa_key
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -46,14 +40,21 @@ class Server:
                 uname = reg[1][0]
                 salt = reg[1][1]
                 vkey = reg[1][2]
+                pub_key = reg[1][3]
                 cid = reg[2]
                 addr = reg[0]
-                if uname not in self.users:
+                if uname not in self.users and uname != "server":
                     self.users[uname] = {"pub_key": None, "passwd": (salt, vkey), "addr": addr, "online": False}
-                    self.pm.queue("ok", Flags.REG, uname, addr, cid)
+                    with open(uname + "s.txt", "wb") as fp:
+                        fp.write(salt)
+                    with open(uname + "v.txt", "wb") as fp:
+                        fp.write(vkey)
+                    with open("users.txt", "a") as fp:
+                        fp.write(uname + "\n")
+                    self.pm.queue(("ok", pub_key), Flags.REG, uname, addr, cid)
                     print("USER ADDED")
                 else:
-                    self.pm.queue("bad user", Flags.REG, "", addr, cid)
+                    self.pm.queue(("bad user", pub_key), Flags.REG, "", addr, cid)
                     print("USER FAILED")
 
             # already existing users
@@ -67,13 +68,7 @@ class Server:
                     self.pm.queue((ss, BB), Flags.LOGIN, user[0])
                     self.users[user[0]]['pub_key'] = self.pm.get_pub(user[0])
                     self.users[user[0]]['online'] = True
-
-            # for user in self.pm.get_logoff_requests():
-            #     if not False in self.users[user[0]]:
-            #         self.users[user].update({"online": False, "session_key": None})
-
-            # for user in self.pm.get_list_requests():
-            #     self.pm.queue(data=("list", list(self.users.keys)), flag=None, uid=user[0])
+                    self.users[user[0]]['addr'] = user[2]
 
             for user in self.pm.get_connection_requests():
                 print(f"REQUEST: {user}")
@@ -87,11 +82,8 @@ class Server:
                 self.connections[cid] = (user[0], user[1], rand_str, cid)
 
             for kk, conn in self.connections.items():
-                # print(f"checking: {conn}")
                 for msg in self.pm.get_msgs(conn[1]):
-                    print(f"MSG: {msg}")
                     if msg == "ok":
-                        print("PART TWO")
                         self.pm.queue(data=("connection initialized:", conn[1], conn[3], conn[2],
                                             self.users[conn[1]]["addr"],
                                             self.users[conn[1]]["pub_key"]),

@@ -127,7 +127,13 @@ class PacketManager:
         :param cid:
         :return:
         """
-        exists = False
+        if self.uid == "server" and isinstance(data, tuple) and (data[0] == "bad user" or data[0] == "ok"):
+            rand = random.SystemRandom()
+            contents = PackEncrypted(pnum=rand.randint(1000, 9999), flags=[flag], frames={}, data=data[0])
+            pickled = cPickle.dumps(contents)
+            nonce = os.urandom(12)
+            pack = Packet(src=(self.ip, self.port), dest=addr, cid=cid, nonce=nonce, encrypted=pickled)
+            self.__send(cid, pack, serialization.load_pem_public_key(data[1], ))
         for sesh in self.sessions:
             if sesh.uid == uid:
                 rand = random.SystemRandom()
@@ -144,15 +150,8 @@ class PacketManager:
 
                 sesh.packs.unsent.append((contents.pnum, pack))
                 break
-        if not exists and flag == Flags.REG and addr is not None and cid is not None:
-            rand = random.SystemRandom()
-            contents = PackEncrypted(pnum=rand.randint(1000, 9999), flags=[flag], frames={}, data=data)
-            pickled = cPickle.dumps(contents)
-            nonce = os.urandom(12)
-            pack = Packet(src=(self.ip, self.port), dest=addr, cid=cid, nonce=nonce, encrypted=pickled)
-            self.__send(cid, pack)
 
-    def __send(self, cid: bytes, pack: Packet):
+    def __send(self, cid: bytes, pack: Packet, pub_key=None):
         """
         Sends packet over the session associated with the given CID
 
@@ -162,6 +161,23 @@ class PacketManager:
         """
         frames = {'acks_recvd': [], 'acks_lost': [], 'ack_delay': 0.0}
         contents: PackEncrypted = cPickle.loads(pack.encrypted)
+        if self.uid == "server" and Flags.REG in contents.flags:
+            contents.frames = frames
+            temp_key = AESGCM.generate_key(128)
+            aesgcm = AESGCM(temp_key)
+            ct = aesgcm.encrypt(pack.nonce, cPickle.dumps(contents), None)
+            ct_nonce = pub_key.encrypt(pack.nonce, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                                algorithm=hashes.SHA256(),
+                                                                label=None))
+            encrypted_key = pub_key.encrypt(temp_key,
+                                            padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                                                         algorithm=hashes.SHA256(),
+                                                         label=None))
+            encrypted = cPickle.dumps((encrypted_key, ct))
+            pack.nonce = ct_nonce
+            pack.encrypted = encrypted
+            self.ss.sendto(cPickle.dumps(pack), pack.dest)
+
         for sesh in self.sessions:
             if sesh.cid == cid:
                 if sesh.packs.time_recvd != 0:
@@ -215,13 +231,10 @@ class PacketManager:
         for conn in msgs:
             data, addr = conn.recvfrom(4096)
             pack: Packet = cPickle.loads(data)
-            # print(f"PACK: {pack}")
             exists = False
             for sesh in self.sessions:
-                # print(pack)
                 if pack.cid == sesh.cid:
                     exists = True
-                    # try:
                     if sesh.handshook:
                         nonce = self.rsa_key.decrypt(pack.nonce,
                                                      padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()),
@@ -229,18 +242,12 @@ class PacketManager:
                                                                   label=None))
                         if nonce in sesh.nonces:
                             break
-                        # print("yes")
                         aesgcm = AESGCM(sesh.shared_key)
                         contents: PackEncrypted = cPickle.loads(aesgcm.decrypt(nonce, pack.encrypted, None))
-                        # print(f"CONTENTS: {contents}")
                         sesh.nonces.append(nonce)
                     else:
                         tup: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
-                        # print("NOT SHOOK")
                         contents = self.__complete_handshake(pack, tup, sesh.initiator)
-                    # except Exception:
-                    #     print("Unable to decrypt")
-                    #     break
 
                     if contents.pnum in dict(sesh.packs.recvd):
                         for ii in range(0, len(sesh.packs.recvd)):
@@ -249,7 +256,6 @@ class PacketManager:
                     else:
                         sesh.packs.recvd.append((contents.pnum, False))
 
-                    # print(contents)
                     if contents.frames['acks_recvd']:
                         for pnum in contents.frames['acks_recvd']:
                             for sent_pack in sesh.packs.sent:
@@ -269,19 +275,15 @@ class PacketManager:
                         self.sessions.remove(sesh)
                         break
                     if Flags.CR in contents.flags:
-                        # print("ADDING CR")
                         sesh.msgs.append((Flags.CR, contents.data))
                     if Flags.REG in contents.flags:
                         sesh.msgs.append((Flags.REG, contents.data))
 
-                    # print(f"CONTENTS: {contents.flags[0]}")
                     if contents.flags[0] is None:
-                        # print("APPENDED")
                         sesh.msgs.append((contents.pnum, contents.data))
                     break
 
             if not exists:
-                # print("NOT KNOWN")
                 contents: tuple[bytes, bytes] = cPickle.loads(pack.encrypted)
                 msg = self.__complete_handshake(pack, contents, False)
                 if Flags.REG in msg.flags:
@@ -349,13 +351,10 @@ class PacketManager:
                         if len(contents.frames['acks_recvd']) == 1:
                             svr: srp.Verifier = sesh.shared_key
                             HAMK = svr.verify_session(keys)
-                            # print(f"HAMK: {HAMK}")
                             if HAMK is None:
-                                # print(f"DELETE3 {keys}")
                                 self.sessions.remove(sesh)
                                 return contents
                             if svr.authenticated():
-                                # print("AUTH")
                                 sk = svr.get_session_key()
                                 sesh.shared_key = HKDF(
                                     algorithm=hashes.SHA256(),
@@ -381,10 +380,8 @@ class PacketManager:
                         sesh.shared_key = derived_key
                         sesh.handshook = True
                         sesh.cr_ready = True
-                        # print(f"Message: Hello {keys[0]}, I'm {self.uid}.")
                         self.queue(f"Hello {keys[0]}, I'm {self.uid}.", flag=None, uid=sesh.uid)
                     else:
-                        # print(f"KEYS1 {keys[1]}")
                         packs, derived_key, pub = self.__incoming_conn(keys, contents.pnum)
                         sesh.handshook = True
                         sesh.shared_key = derived_key
@@ -398,8 +395,9 @@ class PacketManager:
             if Flags.LOGIN in contents.flags:
                 packs = PackInfo(sent=[], recvd=[(contents.pnum, False)], unsent=[], time_recvd=time.time(), pnum=0)
                 sesh = SeshInfo(uid=keys[0], cid=pack.cid, addr=pack.src, shared_key=b'',
-                                pub_key=serialization.load_pem_public_key(keys[2],), packs=packs,
-                                msgs=[(Flags.LOGIN, keys[1])], nonces=[], handshook=False, initiator=False, cr_ready=False)
+                                pub_key=serialization.load_pem_public_key(keys[2], ), packs=packs,
+                                msgs=[(Flags.LOGIN, keys[1])], nonces=[], handshook=False, initiator=False,
+                                cr_ready=False)
                 rand = random.SystemRandom()
                 contents.pnum = rand.randint(1000, 9999)
                 sesh.packs.pnum = contents.pnum
@@ -410,7 +408,6 @@ class PacketManager:
         return contents
 
     def __incoming_conn(self, keys: tuple, pnum: int) -> tuple[PackInfo, bytes, bytes]:
-        # print(f"KEYS2: {keys[1]}")
         pub: ec.EllipticCurvePublicKey = serialization.load_der_public_key(keys[1], None)
         priv = ec.generate_private_key(ec.SECP384R1())
         shared_key = priv.exchange(ec.ECDH(), pub)
@@ -443,14 +440,12 @@ class PacketManager:
         msgs = []
         if uid is None:
             for sesh in self.sessions:
-                # msgs.append(len(sesh.packs.recvd))
                 for mm in sesh.msgs:
                     if isinstance(mm[0], int) and isinstance(mm[1], str):
                         msgs.append((sesh.uid, mm[1]))
                 sesh.msgs.clear()
         else:
             for sesh in self.sessions:
-                # msgs.append(len(sesh.packs.recvd))
                 if sesh.uid == uid:
                     for mm in sesh.msgs:
                         msgs.append(mm[1])
@@ -464,27 +459,22 @@ class PacketManager:
             for msg in sesh.msgs:
                 if isinstance(msg, tuple):
                     if msg[0] == Flags.LOGIN:
-                        msgs.append((sesh.uid, msg[1]))
+                        msgs.append((sesh.uid, msg[1], sesh.addr))
         return msgs
 
     def get_connection_requests(self):
         msgs = []
         for sesh in self.sessions:
             for msg in sesh.msgs:
-                print(f"CONNECTION?: {msg}")
                 if isinstance(msg[1], tuple):
-                    print("REQUEST")
                     if "connect" == msg[1][0]:
                         msgs.append((sesh.uid, msg[1][1]))
         return msgs
 
     def get_cr_msg(self, uid: str):
-        # print(f"GETTING CR {uid}")
         for sesh in self.sessions:
             if uid == sesh.uid:
-                # print(f"SESH MSGS: {sesh.msgs}")
                 for msg in sesh.msgs:
-                    # print(f"CR MSG: {msg[0]}")
                     if msg[0] == Flags.CR:
                         # print("adding")
                         sesh.msgs.remove(msg)
