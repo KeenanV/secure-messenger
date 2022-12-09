@@ -39,21 +39,6 @@ class Server:
 
         self.pm = packet_manager.PacketManager(uid="server", sock=self.socket, port=1337, rsa_key=self.rsa_key)
 
-    def generate_cid(self):
-        cid = os.urandom(16)
-        if cid not in self.connections:
-            return cid
-        else:
-            return self.generate_cid()
-    
-    def sort_online(self):
-        online = []
-        for user in self.users:
-            if self.users[user]['online'] == True:
-                online.append(user)
-        data = ("list", "User: " + "\nUser: ".join(online))
-        return data
-
     def run(self): 
         while True:
             reg = self.pm.run()
@@ -120,6 +105,21 @@ class Server:
                     self.users[msg[0]]['online'] = False
 
             time.sleep(0.01)
+
+    def generate_cid(self):
+        cid = os.urandom(16)
+        if cid not in self.connections:
+            return cid
+        else:
+            return self.generate_cid()
+
+    def sort_online(self):
+        online = []
+        for user in self.users:
+            if self.users[user]['online']:
+                online.append(user)
+        data = ("list", "User: " + "\nUser: ".join(online))
+        return data
 
 
 if __name__ == "__main__":

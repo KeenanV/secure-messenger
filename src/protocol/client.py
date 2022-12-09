@@ -18,18 +18,6 @@ import packet_manager
 from packet import Flags
 
 
-def get_key(pub):
-    with open(pub, "rb") as pub_key_file:
-        if pub.lower().endswith('.der'):
-            pub = serialization.load_der_public_key(pub_key_file.read(),
-                                                    backend=default_backend())
-            return pub
-        elif pub.lower().endswith('.pem'):
-            pub = serialization.load_pem_public_key(pub_key_file.read(),
-                                                    backend=default_backend())
-            return pub
-
-
 class Client:
     def __init__(self, name: str, password: str, reg: bool, ip: str, port: int):
         self.start_time = time.time()
@@ -39,6 +27,7 @@ class Client:
         self.pw = password
         self.socket = socket
         self.port = port
+        self.exit = 0
         self.rsa_priv = rsa.generate_private_key(public_exponent=65537, key_size=2048,)
         self.server_pub: RSAPublicKey
         with open("serve_pub.pem", "rb") as ff:
@@ -47,7 +36,6 @@ class Client:
         self.pm = packet_manager.PacketManager(uid=self.name, sock=self.ss, port=self.port, rsa_key=self.rsa_priv)
         if reg:
             self.run_reg()
-            sys.exit()
         else:
             self.thread2 = threading.Thread(target=self.usr_in)
             self.thread2.start()
@@ -64,8 +52,7 @@ class Client:
 
             msg = self.pm.get_reg_msg()
             if msg == "ok":
-                # write to disk
-                sys.exit()
+                break
             elif msg == "bad user":
                 print("Username already taken. Try again")
                 break
@@ -76,6 +63,9 @@ class Client:
         self.pm.new_cs_sesh(os.urandom(16), addr=("localhost", 1337),
                             usrp=usr, pub_key=self.server_pub)
         while True:
+            if self.exit >= 2:
+                raise SystemExit()
+
             self.pm.run()
             # print(f"msgs: {self.pm.get_msgs()}")
             svr = self.pm.get_msgs("server")
@@ -152,11 +142,11 @@ class Client:
          # TEST
         while True:
             usr_in = input("> ")
-            """
+
             if usr_in == "logout":
-                print("logging out")
-                sys.exit()
-            """
+                self.exit += 1
+                self.command(usr_in.split())
+                break
             self.command(usr_in.split())
 
     def command(self, usr_in: list[str]):
@@ -184,7 +174,7 @@ class Client:
             case ["logout"]:
                 print("Logging out...")
                 self.pm.queue("logout", None, "server")
-                sys.exit()
+                self.exit += 1
             case _:
                 print("Unrecognized input: ", usr_in)
 
