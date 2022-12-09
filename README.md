@@ -1,6 +1,6 @@
 # secure-messenger
 
-Client is started with ./client.py -usr [USERNAME] -pw [PASSWORD] -ip [IP] -port [PORT], with an optional -reg boolean flag to register a new user. Server is started with ./server.py and requires no input. The RSA key pair for the server is hardcoded and needs to be in the same directory. The alice and bob s and v files are used as secrets
+Client is started with ./client.py -usr [USERNAME] -pw [PASSWORD] -ip [IP] -port [PORT], with an optional -reg boolean flag to register a new user. Server is started with ./server.py and requires no input. The RSA key pair for the server is hardcoded and needs to be in the same directory. The alice and bob s and v files are needed but can be ignored.
 
 The three preregistered users are:
 
